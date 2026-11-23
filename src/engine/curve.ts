@@ -3,12 +3,7 @@
  * neighbors is exactly the peak, which is what you expect when you drag one.
  * (Monotone cubic interpolation, Fritsch-Carlson.) Outside the first/last x it holds flat.
  */
-export function monotoneCurve(
-  xs: number[],
-  ys: number[],
-  /** Optional values to take the curve's bend (tangents) from, instead of `ys`. */
-  shapeYs: number[] = ys,
-): (x: number) => number {
+export function monotoneCurve(xs: number[], ys: number[]): (x: number) => number {
   const n = xs.length;
   if (n === 0) return () => 0;
   if (n === 1) {
@@ -19,7 +14,7 @@ export function monotoneCurve(
   const d: number[] = [];
   for (let i = 0; i < n - 1; i++) {
     const dx = at(xs, i + 1) - at(xs, i) || 1e-9;
-    d.push((at(shapeYs, i + 1) - at(shapeYs, i)) / dx);
+    d.push((at(ys, i + 1) - at(ys, i)) / dx);
   }
   const m: number[] = new Array(n).fill(0);
   for (let i = 1; i < n - 1; i++) {

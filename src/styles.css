@@ -255,46 +255,6 @@ button.primary {
   text-transform: none;
 }
 
-.twist-pill {
-  position: absolute;
-  z-index: 1;
-  transform: translateX(-50%);
-  padding: 5px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--accent);
-  background: rgb(23 25 30 / 0.92);
-  color: var(--ink);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.twist-pill strong {
-  color: var(--accent);
-}
-
-/* Phone-only list of smoothing suggestions (pills on the canvas are too easy to hit there). */
-.twist-list {
-  display: none;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.twist-list button {
-  font-size: 12.5px;
-  border-color: var(--accent);
-}
-
-.link-button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font-weight: 600;
-  font-size: 13px;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
 .meta {
   margin: 0;
   color: var(--muted);
@@ -790,12 +750,8 @@ code {
 
 @media (max-width: 860px) {
   /* The panel has the same marker controls; the floating card would cover a small canvas. */
-  .marker-card,
-  .twist-pill {
+  .marker-card {
     display: none;
-  }
-  .twist-list {
-    display: flex;
   }
   /* Keep the artwork in view while scrolling through controls. */
   .canvas-area {

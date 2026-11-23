@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { generateRibbon, ribbonPath, type Marker, type RibbonSettings } from "../engine/ribbon";
 import { GLRibbon } from "../engine/glRender";
 import { drawRibbon } from "../engine/ribbonRender";
-import { RIBBON_LIMITS as L, sharpTwists } from "../engine/ribbon";
+import { RIBBON_LIMITS as L } from "../engine/ribbon";
 import { Slider, deg, pct } from "./Slider";
 
 interface Props {
@@ -20,8 +20,6 @@ interface Props {
   onEditMarker: (id: string, patch: Partial<Marker>) => void;
   onRemoveMarker: () => void;
   canRemove: boolean;
-  /** Optional fix offered where neighboring markers twist sharply. */
-  onSmoothTwist: (aId: string, bId: string) => void;
 }
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -38,7 +36,6 @@ export function Stage({
   onEditMarker,
   onRemoveMarker,
   canRemove,
-  onSmoothTwist,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -263,34 +260,6 @@ export function Stage({
       )}
       {showGuides &&
         (() => {
-          const order = [...s.markers].sort((a, b) => a.x - b.x);
-          const path = ribbonPath(s.markers);
-          return sharpTwists(s.markers).map(({ a, b }) => {
-            const mx = (a.x + b.x) / 2;
-            const na = order.indexOf(a) + 1;
-            const nb = order.indexOf(b) + 1;
-            return (
-              <button
-                key={`${a.id}-${b.id}`}
-                type="button"
-                className="twist-pill"
-                style={{
-                  left: `clamp(80px, ${mx * 100}%, calc(100% - 80px))`,
-                  top: `clamp(8px, calc(${path.y(mx) * 100}% - 64px), calc(100% - 40px))`,
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
-                onClick={() => onSmoothTwist(a.id, b.id)}
-                aria-label={`Sharp twist between markers ${na} and ${nb}. ${Math.abs(b.twist - a.twist) >= 90 ? "Untwist" : "Smooth"} it.`}
-              >
-                Sharp twist ·{" "}
-                <strong>{Math.abs(b.twist - a.twist) >= 90 ? "Untwist" : "Smooth"}</strong>
-              </button>
-            );
-          });
-        })()}
-      {showGuides &&
-        (() => {
           const m = s.markers.find((x) => x.id === selectedId);
           if (!m) return null;
           const n = [...s.markers].sort((a, b) => a.x - b.x).findIndex((x) => x.id === m.id) + 1;
@@ -332,8 +301,8 @@ export function Stage({
               <Slider
                 label="Twist"
                 value={m.twist}
-                min={-360}
-                max={360}
+                min={L.twist[0]}
+                max={L.twist[1]}
                 display={deg}
                 onChange={(v) => onEditMarker(m.id, { twist: v })}
               />

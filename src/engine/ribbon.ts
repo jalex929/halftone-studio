@@ -16,11 +16,6 @@ export interface Marker {
   width: number;
   /** Twist in degrees: 0 faces you flat, 90 is edge-on (a bright line). */
   twist: number;
-  /**
-   * Which face of the ribbon is showing. Untwist turns markers by 180°, which shows the other
-   * face; flipping keeps curl bending the same way on screen, so the shape doesn't change.
-   */
-  flip?: boolean;
 }
 
 export interface RibbonSettings {
@@ -81,8 +76,7 @@ export const RIBBON_LIMITS = {
   fill: [0.2, 1.2],
   gapFill: [0, 1],
   markerWidth: [0.01, 1.5],
-  /** Wide enough to hold untwisted (unwrapped) angles; the slider shows -360..360. */
-  twist: [-540, 540],
+  twist: [-180, 180],
 } as const;
 
 const MAX_MARKERS = 12;
@@ -107,17 +101,9 @@ export function ribbonPath(markers: Marker[]) {
       xs,
       ms.map((m) => m.width),
     ),
-    // Bends are measured as if untwisted half-turns were still there (+180° per flipped
-    // face), so untwisting leaves every segment but the untwisted one exactly as it was.
     twist: monotoneCurve(
       xs,
       ms.map((m) => m.twist),
-      ms.map((m) => m.twist + (m.flip ? 180 : 0)),
-    ),
-    /** +1 or -1 per marker (blended between), so curl follows the face that's showing. */
-    curlSign: monotoneCurve(
-      xs,
-      ms.map((m) => (m.flip ? -1 : 1)),
     ),
   };
 }
@@ -189,15 +175,12 @@ export function generateRibbon(s: RibbonSettings): RibbonDot[] {
       const theta = (path.twist(u) * Math.PI) / 180;
       const cos = Math.cos(theta);
       const sin = Math.sin(theta);
-      const curlSign = path.curlSign(u);
       for (let r = 0; r < rows; r++) {
         const v = rows === 1 ? 0 : -1 + (2 * r) / (rows - 1);
         const local = v * half;
         // Curl bends each cross-section into an arc, perpendicular to its own direction.
-        const bend = s.curl * curlSign * half * 0.6 * (v * v - 1 / 3);
-        // Ripple follows the face that's showing too (a flipped face mirrors the rows).
-        const wave =
-          s.ripple * half * 0.25 * Math.sin(2 * Math.PI * s.rippleCount * u + curlSign * v * 2.4);
+        const bend = s.curl * half * 0.6 * (v * v - 1 / 3);
+        const wave = s.ripple * half * 0.25 * Math.sin(2 * Math.PI * s.rippleCount * u + v * 2.4);
         const inPlane = local * cos - bend * sin + wave;
         const px = u * W + nx * inPlane;
         const py = centerY + ny * inPlane;
@@ -376,56 +359,6 @@ function paintOrder(dots: RibbonDot[]): RibbonDot[] {
   return out;
 }
 
-/** Degrees of twist per 1% of artboard width above which a twist counts as sharp. */
-export const SHARP_TWIST = 6;
-
-/** Neighboring marker pairs whose twist changes faster than SHARP_TWIST. */
-export function sharpTwists(markers: Marker[]): { a: Marker; b: Marker }[] {
-  const ms = sortedMarkers(markers);
-  const out: { a: Marker; b: Marker }[] = [];
-  for (let i = 0; i < ms.length - 1; i++) {
-    const a = ms[i]!;
-    const b = ms[i + 1]!;
-    const span = Math.max(0.005, b.x - a.x) * 100;
-    if (Math.abs(b.twist - a.twist) / span > SHARP_TWIST) out.push({ a, b });
-  }
-  return out;
-}
-
-/**
- * Untwists a sharp half-turn without changing the look elsewhere. A ribbon turned 180° is the
- * same ribbon seen from its other face, so markers from `b` onward turn by a multiple of 180°
- * (keeping every later segment's shape) and swap faces (keeping curl bending the same way).
- * Only the a-b stretch changes: it stops spinning. Returns null when there's no half-turn to
- * remove (the change is under 90°); smoothTwist handles those.
- */
-export function untwist(markers: Marker[], aId: string, bId: string): Marker[] | null {
-  const a = markers.find((m) => m.id === aId);
-  const b = markers.find((m) => m.id === bId);
-  if (!a || !b) return null;
-  const halfTurns = Math.round((b.twist - a.twist) / 180);
-  if (halfTurns === 0) return null;
-  const shift = -180 * halfTurns;
-  const odd = Math.abs(halfTurns) % 2 === 1;
-  return markers.map((m) =>
-    m.x >= b.x && m.id !== a.id
-      ? {
-          ...m,
-          twist: Math.max(-540, Math.min(540, m.twist + shift)),
-          ...(odd ? { flip: !m.flip } : {}),
-        }
-      : m,
-  );
-}
-
-/** Eases a sharp twist: keeps its middle angle, shrinks the change to a gentle rate. */
-export function smoothTwist(a: Marker, b: Marker): { a: number; b: number } {
-  const span = Math.max(0.005, b.x - a.x) * 100;
-  const mid = (a.twist + b.twist) / 2;
-  const delta = Math.sign(b.twist - a.twist) * Math.min(Math.abs(b.twist - a.twist), 4 * span);
-  return { a: mid - delta / 2, b: mid + delta / 2 };
-}
-
 export const NAVY = "#0e2238";
 export const SLATE = "#4f6c8c";
 
@@ -550,7 +483,6 @@ function sanitizeMarker(v: unknown): Marker | null {
     y: num(o.y, [0, 1], 0.5),
     width: num(o.width, RIBBON_LIMITS.markerWidth, 0.3),
     twist: num(o.twist, RIBBON_LIMITS.twist, 0),
-    ...(o.flip === true ? { flip: true } : {}),
   };
 }
 
