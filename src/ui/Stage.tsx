@@ -281,9 +281,10 @@ export function Stage({
                 onPointerDown={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
                 onClick={() => onSmoothTwist(a.id, b.id)}
-                aria-label={`Sharp twist between markers ${na} and ${nb}. Smooth it.`}
+                aria-label={`Sharp twist between markers ${na} and ${nb}. ${Math.abs(b.twist - a.twist) >= 90 ? "Untwist" : "Smooth"} it.`}
               >
-                Sharp twist · <strong>Smooth</strong>
+                Sharp twist ·{" "}
+                <strong>{Math.abs(b.twist - a.twist) >= 90 ? "Untwist" : "Smooth"}</strong>
               </button>
             );
           });
@@ -331,8 +332,8 @@ export function Stage({
               <Slider
                 label="Twist"
                 value={m.twist}
-                min={L.twist[0]}
-                max={L.twist[1]}
+                min={-360}
+                max={360}
                 display={deg}
                 onChange={(v) => onEditMarker(m.id, { twist: v })}
               />

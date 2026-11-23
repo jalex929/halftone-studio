@@ -11,6 +11,7 @@ import {
   sharpTwists,
   smoothTwist,
   sortedMarkers,
+  untwist,
   type Marker,
   type RibbonSettings,
 } from "./engine/ribbon";
@@ -254,19 +255,26 @@ export function App() {
     setSelectedId(null);
   };
 
+  /** Untwists a half-turn (shape elsewhere unchanged), or eases a smaller sharp twist. */
   const smoothPair = (aId: string, bId: string) => {
     const a = s.markers.find((m) => m.id === aId);
     const b = s.markers.find((m) => m.id === bId);
     if (!a || !b) return;
-    const next = smoothTwist(a, b);
     const na = order.findIndex((m) => m.id === aId) + 1;
     const nb = order.findIndex((m) => m.id === bId) + 1;
-    update({
-      markers: s.markers.map((m) =>
-        m.id === aId ? { ...m, twist: next.a } : m.id === bId ? { ...m, twist: next.b } : m,
-      ),
-    });
-    setStatus(`Smoothed the twist between markers ${na} and ${nb}.`);
+    const untwisted = untwist(s.markers, aId, bId);
+    if (untwisted) {
+      update({ markers: untwisted });
+      setStatus(`Untwisted between markers ${na} and ${nb}; the rest of the ribbon is unchanged.`);
+    } else {
+      const next = smoothTwist(a, b);
+      update({
+        markers: s.markers.map((m) =>
+          m.id === aId ? { ...m, twist: next.a } : m.id === bId ? { ...m, twist: next.b } : m,
+        ),
+      });
+      setStatus(`Smoothed the twist between markers ${na} and ${nb}.`);
+    }
     setStatusUndo(true);
   };
   const sharp = showGuides ? sharpTwists(s.markers) : [];
@@ -352,7 +360,7 @@ export function App() {
                     type="button"
                     onClick={() => smoothPair(a.id, b.id)}
                   >
-                    Smooth twist {na}–{nb}
+                    {Math.abs(b.twist - a.twist) >= 90 ? "Untwist" : "Smooth"} {na}–{nb}
                   </button>
                 );
               })}
@@ -470,8 +478,8 @@ export function App() {
                       <Slider
                         label="Twist"
                         value={selected.twist}
-                        min={L.twist[0]}
-                        max={L.twist[1]}
+                        min={-360}
+                        max={360}
                         display={deg}
                         hint="0° faces you. ±90° turns it edge-on into a bright line."
                         onChange={(v) => setMarker(selected.id, { twist: v })}

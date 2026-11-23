@@ -5,6 +5,7 @@ import {
   sanitizeRibbon,
   sharpTwists,
   smoothTwist,
+  untwist,
 } from "./ribbon";
 import { ribbonToSvg } from "./ribbonRender";
 import { monotoneCurve } from "./curve";
@@ -122,5 +123,30 @@ describe("ribbon", () => {
     const next = smoothTwist(a, b);
     expect(sharpTwists([{ ...a, twist: next.a }, { ...b, twist: next.b }, c])).toEqual([]);
     expect((next.a + next.b) / 2).toBeCloseTo((15 + 176) / 2);
+  });
+  it("untwist removes the half-turn and leaves the rest of the ribbon exactly as it was", () => {
+    const s = {
+      ...DEFAULT_RIBBON,
+      gapFill: 0,
+      markers: [
+        { id: "a", x: 0, y: 0.4, width: 0.3, twist: 15 },
+        { id: "b", x: 0.1, y: 0.4, width: 0.48, twist: 176 },
+        { id: "c", x: 0.3, y: 0.45, width: 0.35, twist: 122 },
+        { id: "d", x: 0.5, y: 0.6, width: 0.6, twist: 31 },
+        { id: "e", x: 1, y: 0.45, width: 0.75, twist: -55 },
+      ],
+    };
+    const markers = untwist(s.markers, "a", "b")!;
+    expect(markers.find((m) => m.id === "b")!.twist).toBe(-4);
+    expect(sharpTwists(markers).some((p) => p.a.id === "a")).toBe(false);
+    // Everything right of marker b is the same set of dots.
+    const key = (d: { x: number; y: number; size: number }) =>
+      `${d.x.toFixed(2)},${d.y.toFixed(2)},${d.size.toFixed(2)}`;
+    const right = (dots: ReturnType<typeof generateRibbon>) =>
+      dots
+        .filter((d) => d.x > 0.12 * s.width)
+        .map(key)
+        .sort();
+    expect(right(generateRibbon({ ...s, markers }))).toEqual(right(generateRibbon(s)));
   });
 });
