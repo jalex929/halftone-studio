@@ -7,6 +7,9 @@ markers on the canvas to shape a 3D ribbon of dots: where it rises and dips, how
 and how far it twists. Then export real vector SVG or PNG. Free, no sign-up, and everything
 stays in your browser.
 
+Try it at [jayfox.design/lab/halftone-studio](https://jayfox.design/lab/halftone-studio/). Why it's
+built the way it is, and who decided what: [DECISIONS.md](DECISIONS.md).
+
 ## Controls
 
 - **Markers:** drag to move, double-click the canvas to add one, Delete to remove. Each one sets

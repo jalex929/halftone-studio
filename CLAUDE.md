@@ -1,6 +1,6 @@
 # Working in halftone-studio
 
-Read `README.md` and `docs/DECISIONS.md` first; add a row to DECISIONS.md for every new call.
+Read `README.md` and `DECISIONS.md` first; add a row to DECISIONS.md for every new call.
 
 - The goal is true, high-fidelity halftones: dots must stay dots. Any engine change keeps the
   "never outgrow its room" and "even spacing" tests passing.
