@@ -9,28 +9,33 @@ import { resolve } from "node:path";
 
 const APP = process.argv[2] ?? "http://localhost:5191/";
 
-// The share ribbon: rises from the lower left, twists through the middle, opens up on the right.
+// The share ribbon is Jay's first design (designs/2026-11-22-first-ribbon.json, later tweaks),
+// squeezed into the right part of the card so its twisty end sits just past the text.
 // Rendered at 2x (2400x1260) for a sharp downscale.
+const START = 0.4; // where the ribbon begins, as a share of card width
+const SPAN = 1 - START;
+const JAY = [
+  { x: 0, y: 0.395, width: 0.3, twist: 15 },
+  { x: 0.095, y: 0.4, width: 0.48, twist: 176 },
+  { x: 0.31, y: 0.455, width: 0.35, twist: 122 },
+  { x: 0.475, y: 0.596, width: 0.629, twist: 31.6 },
+  { x: 0.735, y: 0.62, width: 0.15, twist: -180 },
+  { x: 1, y: 0.45, width: 0.75, twist: -55 },
+];
 const RIBBON = {
   width: 2400,
   height: 1260,
-  markers: [
-    { id: "a", x: 0.2, y: 0.86, width: 0.18, twist: 20 },
-    { id: "b", x: 0.42, y: 0.74, width: 0.3, twist: 75 },
-    { id: "c", x: 0.6, y: 0.5, width: 0.55, twist: 25 },
-    { id: "d", x: 0.8, y: 0.62, width: 0.5, twist: -35 },
-    { id: "e", x: 1, y: 0.32, width: 0.85, twist: -70 },
-  ],
-  columns: 340,
-  rows: 56,
+  markers: JAY.map((m, i) => ({ ...m, id: `m${i}`, x: START + SPAN * m.x })),
+  columns: 500,
+  rows: 64,
   dotSize: 9,
-  perspective: 0.7,
-  depthFade: 0.3,
-  edgeSoftness: 0.9,
-  ripple: 0.35,
-  rippleCount: 6,
-  curl: 0.6,
-  fill: 0.9,
+  perspective: 0.79,
+  depthFade: 0.35,
+  edgeSoftness: 0.94,
+  ripple: 0.47,
+  rippleCount: 6.5 / SPAN, // same wave rhythm in the narrower space
+  curl: 0.77,
+  fill: 0.91,
   gapFill: 0.7,
   shape: "circle",
   ink: "#ffffff",
