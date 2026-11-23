@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { generateRibbon, ribbonPath, type Marker, type RibbonSettings } from "../engine/ribbon";
+import { GLRibbon } from "../engine/glRender";
 import { drawRibbon } from "../engine/ribbonRender";
 import { RIBBON_LIMITS as L } from "../engine/ribbon";
 import { Slider, deg, pct } from "./Slider";
@@ -59,16 +60,44 @@ export function Stage({
     onDotCount?.(dots.length);
   }, [dots, onDotCount]);
 
+  // GPU renderer when available; plain 2D canvas otherwise. Decided once per canvas.
+  const renderer = useRef<{ gl: GLRibbon | null; tried: boolean }>({ gl: null, tried: false });
+
   useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
+    if (!canvas) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const scale = Math.min(1, (displayW * dpr) / s.width);
-    canvas.width = Math.round(s.width * scale);
-    canvas.height = Math.round(s.height * scale);
-    drawRibbon(ctx, s, dots, scale);
+    const w = Math.round(s.width * scale);
+    const h = Math.round(s.height * scale);
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
+    const r = renderer.current;
+    if (!r.tried) {
+      r.tried = true;
+      r.gl = GLRibbon.create(canvas);
+    }
+    if (r.gl) r.gl.draw(s, dots, scale);
+    else {
+      const ctx = canvas.getContext("2d");
+      if (ctx) drawRibbon(ctx, s, dots, scale);
+    }
   }, [dots, s, displayW]);
+
+  // Pointer moves can arrive faster than the screen refreshes: apply at most one per frame.
+  const pending = useRef<{ id: string; x: number; y: number } | null>(null);
+  const frame = useRef(0);
+  const queueMove = (id: string, x: number, y: number) => {
+    pending.current = { id, x, y };
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      const p = pending.current;
+      pending.current = null;
+      if (p) onMoveMarker(p.id, p.x, p.y);
+    });
+  };
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
   const toArtboard = (clientX: number, clientY: number) => {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -135,7 +164,7 @@ export function Stage({
             const d = drag.current;
             if (!d || d.pointer !== e.pointerId) return;
             const p = toArtboard(e.clientX, e.clientY);
-            onMoveMarker(d.id, p.x, p.y);
+            queueMove(d.id, p.x, p.y);
           }}
           onPointerUp={(e) => {
             if (drag.current?.pointer === e.pointerId) {

@@ -191,31 +191,52 @@ export function generateRibbon(s: RibbonSettings): RibbonDot[] {
   // 3. Size every dot to the room it actually has on screen, like a real halftone screen:
   //    a dot never grows past `fill` of the distance to its neighbors, so squeezed areas
   //    stay crisp separate dots instead of merging into lines.
-  const dist = (a: number, b: number) =>
-    Math.hypot((gx[a] ?? 0) - (gx[b] ?? 0), (gy[a] ?? 0) - (gy[b] ?? 0));
+  //    Each neighbor distance is measured once and shared by both dots.
+  const gapAlong = new Float64Array(cols * rows); // between column c and c+1, row r
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      const i = c * rows + r;
+      const j = i + rows;
+      gapAlong[i] = Math.hypot(gx[i]! - gx[j]!, gy[i]! - gy[j]!);
+    }
+  }
+  const gapAcross = new Float64Array((cols + 1) * rows); // between row r and r+1, column c
+  for (let c = 0; c <= cols; c++) {
+    for (let r = 0; r < rows - 1; r++) {
+      const i = c * rows + r;
+      gapAcross[i] = Math.hypot(gx[i]! - gx[i + 1]!, gy[i]! - gy[i + 1]!);
+    }
+  }
+  // Per-row values: where the row sits across the ribbon and how much the edge softens it.
+  const rowEdge = new Float64Array(rows);
+  for (let r = 0; r < rows; r++) {
+    const v = rows === 1 ? 0 : -1 + (2 * r) / (rows - 1);
+    rowEdge[r] = 1 - s.edgeSoftness * Math.abs(v) ** 3;
+  }
+  const sizePower = 1 + 2 * s.perspective;
+  const oneInk = s.ink === s.inkFar;
   const dots: RibbonDot[] = [];
   for (let c = 0; c <= cols; c++) {
     for (let r = 0; r < rows; r++) {
       const i = c * rows + r;
-      const scale = gScale[i] ?? 0;
+      const scale = gScale[i]!;
       if (scale <= 0) continue;
       let along = Infinity;
-      if (c > 0) along = Math.min(along, dist(i, i - rows));
-      if (c < cols) along = Math.min(along, dist(i, i + rows));
+      if (c > 0) along = gapAlong[i - rows]!;
+      if (c < cols) along = Math.min(along, gapAlong[i]!);
       let across = Infinity;
-      if (r > 0) across = Math.min(across, dist(i, i - 1));
-      if (r < rows - 1) across = Math.min(across, dist(i, i + 1));
+      if (r > 0) across = gapAcross[i - 1]!;
+      if (r < rows - 1) across = Math.min(across, gapAcross[i]!);
       // Edge-on, a whole column collapses to one spot; let it read as one dot on the path.
       const room = Math.max(Math.min(along, across), 0.5 * along);
-      const v = rows === 1 ? 0 : -1 + (2 * r) / (rows - 1);
-      const edge = 1 - s.edgeSoftness * Math.pow(Math.abs(v), 3);
-      const wanted = s.dotSize * Math.pow(scale, 1 + 2 * s.perspective) * edge;
+      const edge = rowEdge[r]!;
+      const wanted = s.dotSize * scale ** sizePower * edge;
       const size = Math.min(wanted, s.fill * room * edge);
       if (size < 0.3) continue;
-      const x = gx[i] ?? 0;
-      const y = gy[i] ?? 0;
+      const x = gx[i]!;
+      const y = gy[i]!;
       if (x < -size || x > W + size || y < -size || y > H + size) continue;
-      const pz = gz[i] ?? 0;
+      const pz = gz[i]!;
       const depth01 = Math.max(0, Math.min(1, 0.5 + pz / (2 * maxDepth)));
       const opacity = Math.round((1 - s.depthFade * depth01) * 20) / 20;
       if (opacity <= 0) continue;
@@ -224,14 +245,31 @@ export function generateRibbon(s: RibbonSettings): RibbonDot[] {
         y,
         size,
         opacity,
-        color: s.ink === s.inkFar ? s.ink : mix(s.ink, s.inkFar, depth01, 16),
+        color: oneInk ? s.ink : mix(s.ink, s.inkFar, depth01, 16),
         depth: pz,
       });
     }
   }
-  // Paint far to near.
-  dots.sort((a, b) => b.depth - a.depth);
-  return dots;
+  return paintOrder(dots);
+}
+
+/**
+ * Far-to-near order. Packs a depth key and the dot's index into one number so the browser's
+ * native numeric sort does the work: several times faster than a comparator on 30k objects.
+ */
+function paintOrder(dots: RibbonDot[]): RibbonDot[] {
+  const n = dots.length;
+  const keys = new Float64Array(n);
+  const SHIFT = 2 ** 21; // room for up to ~2M dots
+  for (let i = 0; i < n; i++) {
+    // Larger depth (farther) first; depth quantized to 1/16 px, plenty for paint order.
+    const q = Math.round(-(dots[i]?.depth ?? 0) * 16) + 2 ** 26;
+    keys[i] = q * SHIFT + i;
+  }
+  keys.sort();
+  const out = new Array<RibbonDot>(n);
+  for (let i = 0; i < n; i++) out[i] = dots[(keys[i] ?? 0) % SHIFT]!;
+  return out;
 }
 
 export const NAVY = "#0e2238";

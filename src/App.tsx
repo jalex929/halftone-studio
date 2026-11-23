@@ -13,6 +13,7 @@ import {
   type RibbonSettings,
 } from "./engine/ribbon";
 import { addPngText } from "./engine/embed";
+import { GLRibbon } from "./engine/glRender";
 import { drawRibbon, ribbonToSvg } from "./engine/ribbonRender";
 import { SHAPES, type Shape } from "./engine/shapes";
 import { Slider, deg, pct, px } from "./ui/Slider";
@@ -96,13 +97,17 @@ export function App() {
     [commit],
   );
 
+  // Save the draft once edits pause, not on every drag frame.
   useEffect(() => {
     if (touring) return;
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(s));
-    } catch {
-      /* storage unavailable: the draft just won't survive a reload */
-    }
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(s));
+      } catch {
+        /* storage unavailable: the draft just won't survive a reload */
+      }
+    }, 400);
+    return () => clearTimeout(timer);
   }, [s, touring]);
 
   const undo = useCallback(() => {
@@ -193,12 +198,25 @@ export function App() {
   };
 
   const exportPng = (scale: number) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(s.width * scale);
-    canvas.height = Math.round(s.height * scale);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    drawRibbon(ctx, s, generateRibbon(s), scale);
+    const w = Math.round(s.width * scale);
+    const h = Math.round(s.height * scale);
+    const dots = generateRibbon(s);
+    // GPU first (fast at any density); a fresh 2D canvas if WebGL is missing or the size is
+    // beyond what this GPU can render in one pass.
+    let canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const gl = GLRibbon.create(canvas, true);
+    if (gl && Math.max(w, h) <= gl.maxSize()) {
+      gl.draw(s, dots, scale);
+    } else {
+      canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      drawRibbon(ctx, s, dots, scale);
+    }
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       // Settings ride along inside the PNG so it can be reopened and edited.

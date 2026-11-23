@@ -82,4 +82,10 @@ describe("ribbon", () => {
     const gaps = dots.slice(1).map((d, i) => Math.hypot(d.x - dots[i]!.x, d.y - dots[i]!.y));
     expect(Math.max(...gaps) / Math.min(...gaps)).toBeLessThan(1.1);
   });
+  it("paints far to near", () => {
+    const dots = generateRibbon(DEFAULT_RIBBON);
+    for (let i = 1; i < dots.length; i++) {
+      expect(dots[i]!.depth).toBeLessThanOrEqual(dots[i - 1]!.depth + 1 / 16);
+    }
+  });
 });
