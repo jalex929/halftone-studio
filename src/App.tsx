@@ -15,10 +15,10 @@ import {
 import { addPngText } from "./engine/embed";
 import { drawRibbon, ribbonToSvg } from "./engine/ribbonRender";
 import { SHAPES, type Shape } from "./engine/shapes";
-import { Slider, deg, pct } from "./ui/Slider";
+import { Slider, deg, pct, px } from "./ui/Slider";
 import { SavedDesigns } from "./ui/SavedDesigns";
 import { Stage } from "./ui/Stage";
-import { Tutorial, tutorialSeen } from "./ui/Tutorial";
+import { Tour, tourSeen } from "./ui/Tour";
 
 const DRAFT_KEY = "halftone-studio:ribbon";
 
@@ -59,12 +59,18 @@ type Tab = (typeof TABS)[number]["id"];
 
 export function App() {
   const [tab, setTab] = useState<Tab>("shape");
-  const [showTutorial, setShowTutorial] = useState(() => !tutorialSeen());
+  const [tourBase, setTourBase] = useState<RibbonSettings | null>(null);
+  const touring = tourBase !== null;
   const [s, setS] = useState<RibbonSettings>(loadDraft);
   const [selectedId, setSelectedId] = useState<string | null>(s.markers[1]?.id ?? null);
   const [showGuides, setShowGuides] = useState(true);
   const [dotCount, setDotCount] = useState(0);
   const [status, setStatus] = useState("");
+  useEffect(() => {
+    if (!tourSeen()) setTourBase(s);
+    // Only on first load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const past = useRef<RibbonSettings[]>([]);
   const future = useRef<RibbonSettings[]>([]);
   // The settings as of the last undo step, so a whole drag becomes one step.
@@ -91,12 +97,13 @@ export function App() {
   );
 
   useEffect(() => {
+    if (touring) return;
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(s));
     } catch {
       /* storage unavailable: the draft just won't survive a reload */
     }
-  }, [s]);
+  }, [s, touring]);
 
   const undo = useCallback(() => {
     const prev = past.current.pop();
@@ -233,7 +240,7 @@ export function App() {
           Drag the markers to shape the ribbon. Double-click the canvas to add one.
         </p>
         <div className="top-actions">
-          <button type="button" onClick={() => setShowTutorial(true)}>
+          <button type="button" onClick={() => setTourBase(s)}>
             How it works
           </button>
           <button type="button" onClick={undo} disabled={past.current.length === 0}>
@@ -264,6 +271,9 @@ export function App() {
             onCommit={commit}
             onAddMarker={(x, y) => addMarker(x, y)}
             onDotCount={setDotCount}
+            onEditMarker={(id, patch) => setMarker(id, patch)}
+            onRemoveMarker={removeSelected}
+            canRemove={s.markers.length > 2}
           />
           <p className="meta">
             {s.width} × {s.height}px · {dotCount.toLocaleString()} dots · {s.markers.length} markers
@@ -271,14 +281,6 @@ export function App() {
               {status}
             </span>
           </p>
-          <div className="presets" role="group" aria-label="Start from">
-            <span className="label">Start from</span>
-            {RIBBON_PRESETS.map((p) => (
-              <button key={p.id} type="button" onClick={() => applyPreset(p.settings)}>
-                {p.label}
-              </button>
-            ))}
-          </div>
         </section>
 
         <aside className="panel" aria-label="Controls">
@@ -347,7 +349,7 @@ export function App() {
                         min={0}
                         max={1}
                         step={0.005}
-                        format={pct}
+                        display={pct}
                         onChange={(v) => setMarker(selected.id, { y: 1 - v })}
                       />
                       <Slider
@@ -356,7 +358,7 @@ export function App() {
                         min={0}
                         max={1}
                         step={0.005}
-                        format={pct}
+                        display={pct}
                         onChange={(v) => setMarker(selected.id, { x: v })}
                       />
                       <Slider
@@ -365,7 +367,7 @@ export function App() {
                         min={L.markerWidth[0]}
                         max={L.markerWidth[1]}
                         step={0.01}
-                        format={pct}
+                        display={pct}
                         hint="How wide the ribbon is at this marker."
                         onChange={(v) => setMarker(selected.id, { width: v })}
                       />
@@ -374,7 +376,7 @@ export function App() {
                         value={selected.twist}
                         min={L.twist[0]}
                         max={L.twist[1]}
-                        format={deg}
+                        display={deg}
                         hint="0° faces you. ±90° turns it edge-on into a bright line."
                         onChange={(v) => setMarker(selected.id, { twist: v })}
                       />
@@ -387,6 +389,50 @@ export function App() {
                 </section>
               </>
             )}
+            {tab === "shape" && (
+              <section className="group">
+                <h2>Ribbon</h2>
+                <Slider
+                  label="Curl"
+                  value={s.curl}
+                  min={L.curl[0]}
+                  max={L.curl[1]}
+                  step={0.01}
+                  display={pct}
+                  hint="Bends the ribbon across, for the scalloped arcs."
+                  onChange={(v) => update({ curl: v })}
+                />
+                <Slider
+                  label="Ripple"
+                  value={s.ripple}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  display={pct}
+                  onChange={(v) => update({ ripple: v })}
+                />
+                <Slider
+                  label="Ripple count"
+                  value={s.rippleCount}
+                  min={L.rippleCount[0]}
+                  max={L.rippleCount[1]}
+                  step={0.5}
+                  onChange={(v) => update({ rippleCount: v })}
+                />
+              </section>
+            )}
+            {tab === "shape" && (
+              <section className="group">
+                <h2>Start from</h2>
+                <div className="chips">
+                  {RIBBON_PRESETS.map((p) => (
+                    <button key={p.id} type="button" onClick={() => applyPreset(p.settings)}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
             {tab === "dots" && (
               <>
                 <section className="group">
@@ -397,7 +443,7 @@ export function App() {
                     min={L.dotSize[0]}
                     max={20}
                     step={0.1}
-                    format={(v) => `${v.toFixed(1)}px`}
+                    display={px}
                     onChange={(v) => update({ dotSize: v })}
                   />
                   <Slider
@@ -406,7 +452,7 @@ export function App() {
                     min={L.fill[0]}
                     max={L.fill[1]}
                     step={0.01}
-                    format={pct}
+                    display={pct}
                     hint="Biggest a dot can get next to its neighbors. Under 100% every dot stays separate."
                     onChange={(v) => update({ fill: v })}
                   />
@@ -456,7 +502,7 @@ export function App() {
                     min={0}
                     max={1}
                     step={0.01}
-                    format={pct}
+                    display={pct}
                     hint="Near dots grow, far dots shrink."
                     onChange={(v) => update({ perspective: v })}
                   />
@@ -466,18 +512,8 @@ export function App() {
                     min={0}
                     max={1}
                     step={0.01}
-                    format={pct}
+                    display={pct}
                     onChange={(v) => update({ depthFade: v })}
-                  />
-                  <Slider
-                    label="Curl"
-                    value={s.curl}
-                    min={L.curl[0]}
-                    max={L.curl[1]}
-                    step={0.01}
-                    format={pct}
-                    hint="Bends the ribbon across, for the scalloped arcs."
-                    onChange={(v) => update({ curl: v })}
                   />
                   <Slider
                     label="Soft edges"
@@ -485,25 +521,8 @@ export function App() {
                     min={0}
                     max={1}
                     step={0.01}
-                    format={pct}
+                    display={pct}
                     onChange={(v) => update({ edgeSoftness: v })}
-                  />
-                  <Slider
-                    label="Ripple"
-                    value={s.ripple}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    format={pct}
-                    onChange={(v) => update({ ripple: v })}
-                  />
-                  <Slider
-                    label="Ripple count"
-                    value={s.rippleCount}
-                    min={L.rippleCount[0]}
-                    max={L.rippleCount[1]}
-                    step={0.5}
-                    onChange={(v) => update({ rippleCount: v })}
                   />
                 </section>
               </>
@@ -605,7 +624,15 @@ export function App() {
           </div>
         </aside>
       </main>
-      {showTutorial && <Tutorial onClose={() => setShowTutorial(false)} />}
+      {tourBase && (
+        <Tour
+          base={tourBase}
+          apply={setS}
+          setTab={setTab}
+          select={setSelectedId}
+          onDone={() => setTourBase(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { generateRibbon, ribbonPath, type Marker, type RibbonSettings } from "../engine/ribbon";
 import { drawRibbon } from "../engine/ribbonRender";
+import { RIBBON_LIMITS as L } from "../engine/ribbon";
+import { Slider, deg, pct } from "./Slider";
 
 interface Props {
   settings: RibbonSettings;
@@ -13,6 +15,10 @@ interface Props {
   onCommit: () => void;
   onAddMarker: (x: number, y: number) => void;
   onDotCount?: (n: number) => void;
+  /** Edit the selected marker from the card beside it. */
+  onEditMarker: (id: string, patch: Partial<Marker>) => void;
+  onRemoveMarker: () => void;
+  canRemove: boolean;
 }
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -26,6 +32,9 @@ export function Stage({
   onCommit,
   onAddMarker,
   onDotCount,
+  onEditMarker,
+  onRemoveMarker,
+  canRemove,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -193,6 +202,57 @@ export function Stage({
           })}
         </svg>
       )}
+      {showGuides &&
+        (() => {
+          const m = s.markers.find((x) => x.id === selectedId);
+          if (!m) return null;
+          const n = [...s.markers].sort((a, b) => a.x - b.x).findIndex((x) => x.id === m.id) + 1;
+          // Sit beside the marker, flipping to the other side near the right or bottom edge.
+          const style: React.CSSProperties = {
+            [m.x > 0.62 ? "right" : "left"]: `calc(${(m.x > 0.62 ? 1 - m.x : m.x) * 100}% + 22px)`,
+            [m.y > 0.55 ? "bottom" : "top"]:
+              `max(8px, calc(${(m.y > 0.55 ? 1 - m.y : m.y) * 100}% - 40px))`,
+          };
+          return (
+            <div
+              className="marker-card"
+              style={style}
+              role="group"
+              aria-label={`Marker ${n} settings`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+            >
+              <div className="marker-card-head">
+                <span>Marker {n}</span>
+                <button
+                  type="button"
+                  onClick={onRemoveMarker}
+                  disabled={!canRemove}
+                  aria-label={`Delete marker ${n}`}
+                >
+                  Delete
+                </button>
+              </div>
+              <Slider
+                label="Width"
+                value={m.width}
+                min={L.markerWidth[0]}
+                max={L.markerWidth[1]}
+                step={0.01}
+                display={pct}
+                onChange={(v) => onEditMarker(m.id, { width: v })}
+              />
+              <Slider
+                label="Twist"
+                value={m.twist}
+                min={L.twist[0]}
+                max={L.twist[1]}
+                display={deg}
+                onChange={(v) => onEditMarker(m.id, { twist: v })}
+              />
+            </div>
+          );
+        })()}
     </div>
   );
 }

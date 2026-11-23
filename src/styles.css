@@ -217,6 +217,44 @@ button.primary {
   stroke: var(--focus);
 }
 
+.marker-card {
+  position: absolute;
+  z-index: 2;
+  width: 270px;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgb(23 25 30 / 0.94);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.marker-card .ctl {
+  grid-template-columns: 52px 1fr 66px;
+}
+
+.marker-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.marker-card-head button {
+  padding: 3px 8px;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .meta {
   margin: 0;
   color: var(--muted);
@@ -291,29 +329,162 @@ button.primary {
 }
 
 .group {
-  padding: 16px 18px;
+  padding: 14px 18px 16px;
   border-bottom: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
-/* One row per slider: label, track, value. */
-.field.slider {
+.group h2,
+.group-head {
+  margin-bottom: 4px;
+}
+
+/* Console row: label | track | number box, on one strict grid. */
+.ctl {
   display: grid;
-  grid-template-columns: 92px 1fr 52px;
+  grid-template-columns: 86px 1fr 74px;
   align-items: center;
-  gap: 10px;
-  font-size: 13.5px;
+  column-gap: 12px;
+  min-height: 30px;
 }
 
-.field.slider output {
-  text-align: right;
+.ctl-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink);
+  white-space: nowrap;
 }
 
-.field.slider .hint {
+.info {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  font:
+    italic 600 10px/14px Georgia,
+    serif;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.info[aria-expanded="true"] {
+  color: var(--paper);
+  background: var(--muted);
+  border-color: var(--muted);
+}
+
+.ctl-hint {
   grid-column: 1 / -1;
-  margin-top: -6px;
+  margin: 4px 0 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.ctl-num {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  padding: 0 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ctl-num:focus-within {
+  border-color: var(--focus);
+}
+
+.ctl-num input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  text-align: right;
+  padding: 0 3px 0 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  outline: none;
+}
+
+/* Thin custom track with a filled portion up to the thumb. */
+.range {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.range::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) 0 var(--fill), var(--line) var(--fill) 100%);
+}
+
+.range::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.range::-moz-range-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 0;
+  box-shadow: 0 0 0 3px var(--panel);
+  transition: transform 0.1s;
+}
+
+.range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 0;
+  box-shadow: 0 0 0 3px var(--panel);
+}
+
+.range:hover::-webkit-slider-thumb,
+.range:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+
+.range:focus-visible {
+  outline: none;
+}
+
+.range:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 3px var(--panel),
+    0 0 0 5px var(--focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .range::-webkit-slider-thumb {
+    transition: none;
+  }
 }
 
 .group-head {
@@ -325,10 +496,11 @@ button.primary {
 
 h2 {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+  color: var(--muted);
 }
 
 .field {
@@ -465,59 +637,72 @@ code {
   font-size: 12px;
 }
 
-.tutorial {
-  width: min(760px, calc(100vw - 32px));
-  padding: 0;
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+/* The hole's huge shadow dims everything except the spotlighted control. */
+.tour-hole {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.42);
+  outline: 2px solid var(--accent);
+  pointer-events: none;
+  transition: all 0.25s ease;
+}
+
+.tour-card {
+  position: fixed;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  padding: 16px 18px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--panel);
-  color: var(--ink);
-  overflow: hidden;
+  box-shadow: 0 20px 50px -20px rgb(0 0 0 / 0.8);
+  transition:
+    top 0.25s ease,
+    left 0.25s ease;
 }
 
-.tutorial::backdrop {
-  background: rgb(0 0 0 / 0.65);
-}
-
-.tutorial-media {
-  background: #000;
-  aspect-ratio: 16 / 9;
-}
-
-.tutorial-media img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.tutorial-body {
-  padding: 18px 22px 20px;
-}
-
-.tutorial-body h2 {
-  font-size: 20px;
+.tour-card h2 {
+  font-size: 18px;
   letter-spacing: -0.01em;
   text-transform: none;
+  color: var(--ink);
   margin: 2px 0 6px;
 }
 
-.tutorial-body p {
+.tour-card p {
   margin: 0;
   color: var(--muted);
   line-height: 1.5;
+  font-size: 14px;
 }
 
-.tutorial-count {
+.tour-count {
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
 }
 
-.tutorial-actions {
+.tour-note {
+  margin-top: 8px !important;
+  font-size: 12.5px !important;
+}
+
+.tour-actions {
   display: flex;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-hole,
+  .tour-card {
+    transition: none;
+  }
 }
 
 .spacer {
