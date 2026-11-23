@@ -1,0 +1,33 @@
+{
+  "width": 2000,
+  "height": 1125,
+  "markers": [
+    { "id": "mmwsr362d4", "x": 0, "y": 0.395, "width": 0.3, "twist": 15 },
+    { "id": "mmwsr362d5", "x": 0.095, "y": 0.4, "width": 0.48, "twist": 176 },
+    { "id": "mmwsr899y0", "x": 0.31, "y": 0.45495082022660116, "width": 0.35, "twist": 122 },
+    {
+      "id": "mmwsr7i0t0",
+      "x": 0.47498622430911663,
+      "y": 0.5956874887257765,
+      "width": 0.6294827450387198,
+      "twist": 31.60212618081573
+    },
+    { "id": "mmwsr362d6", "x": 0.735, "y": 0.62, "width": 0.15, "twist": -180 },
+    { "id": "mmwsr362d7", "x": 1, "y": 0.45, "width": 0.75, "twist": -55 }
+  ],
+  "columns": 458,
+  "rows": 64,
+  "dotSize": 8.5,
+  "perspective": 0.93,
+  "depthFade": 0.35,
+  "edgeSoftness": 0.94,
+  "ripple": 0.47,
+  "rippleCount": 7,
+  "curl": 0.56,
+  "fill": 0.91,
+  "shape": "circle",
+  "ink": "#ffffff",
+  "inkFar": "#ffffff",
+  "background": "#000000",
+  "transparent": false
+}

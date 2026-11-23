@@ -16,13 +16,11 @@ export function Slider({ label, value, min, max, step = 1, format, hint, onChang
   const id = useId();
   const text = format ? format(value) : String(Math.round(value * 100) / 100);
   return (
-    <div className="field">
-      <div className="field-row">
-        <label htmlFor={id}>{label}</label>
-        <output htmlFor={id}>{text}</output>
-      </div>
+    <div className="field slider" title={hint}>
+      <label htmlFor={id}>{label}</label>
       <input
         id={id}
+        aria-describedby={hint ? `${id}-hint` : undefined}
         type="range"
         min={min}
         max={max}
@@ -31,7 +29,12 @@ export function Slider({ label, value, min, max, step = 1, format, hint, onChang
         aria-valuetext={text}
         onChange={(e) => onChange(Number(e.target.value))}
       />
-      {hint && <p className="hint">{hint}</p>}
+      <output htmlFor={id}>{text}</output>
+      {hint && (
+        <p className="hint" id={`${id}-hint`}>
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

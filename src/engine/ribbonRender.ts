@@ -1,4 +1,5 @@
 import type { RibbonDot, RibbonSettings } from "./ribbon";
+import { svgMetadata } from "./embed";
 import { shapePolygon } from "./shapes";
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -30,6 +31,8 @@ export function ribbonToSvg(s: RibbonSettings, dots: RibbonDot[]): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${s.width}" height="${s.height}" viewBox="0 0 ${s.width} ${s.height}">`,
     `<title>Halftone ribbon</title>`,
+    // Lets Halftone Studio reopen this file for editing; other apps ignore it.
+    svgMetadata(JSON.stringify(s)),
     bg,
     out.join(""),
     `</svg>`,

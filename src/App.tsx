@@ -12,10 +12,13 @@ import {
   type Marker,
   type RibbonSettings,
 } from "./engine/ribbon";
+import { addPngText } from "./engine/embed";
 import { drawRibbon, ribbonToSvg } from "./engine/ribbonRender";
 import { SHAPES, type Shape } from "./engine/shapes";
 import { Slider, deg, pct } from "./ui/Slider";
+import { SavedDesigns } from "./ui/SavedDesigns";
 import { Stage } from "./ui/Stage";
+import { Tutorial, tutorialSeen } from "./ui/Tutorial";
 
 const DRAFT_KEY = "halftone-studio:ribbon";
 
@@ -45,7 +48,18 @@ function download(name: string, blob: Blob) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const TABS = [
+  { id: "shape", label: "Shape" },
+  { id: "dots", label: "Dots" },
+  { id: "depth", label: "Depth" },
+  { id: "color", label: "Color" },
+  { id: "file", label: "File" },
+] as const;
+type Tab = (typeof TABS)[number]["id"];
+
 export function App() {
+  const [tab, setTab] = useState<Tab>("shape");
+  const [showTutorial, setShowTutorial] = useState(() => !tutorialSeen());
   const [s, setS] = useState<RibbonSettings>(loadDraft);
   const [selectedId, setSelectedId] = useState<string | null>(s.markers[1]?.id ?? null);
   const [showGuides, setShowGuides] = useState(true);
@@ -178,11 +192,15 @@ export function App() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     drawRibbon(ctx, s, generateRibbon(s), scale);
-    canvas.toBlob((blob) => {
-      if (blob) {
-        download(`halftone-ribbon${scale > 1 ? `@${scale}x` : ""}.png`, blob);
-        setStatus("PNG downloaded.");
-      }
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      // Settings ride along inside the PNG so it can be reopened and edited.
+      const bytes = addPngText(new Uint8Array(await blob.arrayBuffer()), JSON.stringify(s));
+      download(
+        `halftone-ribbon${scale > 1 ? `@${scale}x` : ""}.png`,
+        new Blob([bytes], { type: "image/png" }),
+      );
+      setStatus("PNG downloaded.");
     }, "image/png");
   };
 
@@ -215,6 +233,9 @@ export function App() {
           Drag the markers to shape the ribbon. Double-click the canvas to add one.
         </p>
         <div className="top-actions">
+          <button type="button" onClick={() => setShowTutorial(true)}>
+            How it works
+          </button>
           <button type="button" onClick={undo} disabled={past.current.length === 0}>
             Undo
           </button>
@@ -261,259 +282,330 @@ export function App() {
         </section>
 
         <aside className="panel" aria-label="Controls">
-          <section className="group">
-            <div className="group-head">
-              <h2>{selected ? `Marker ${selIndex}` : "Markers"}</h2>
-              <div className="row-buttons">
-                <button type="button" onClick={addInGap} disabled={s.markers.length >= MAX_MARKERS}>
-                  Add
-                </button>
-                <button
-                  type="button"
-                  onClick={removeSelected}
-                  disabled={!selected || s.markers.length <= 2}
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-            {selected ? (
+          <div className="tabs" role="tablist" aria-label="Control groups">
+            {TABS.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                role="tab"
+                id={`tab-${x.id}`}
+                aria-selected={tab === x.id}
+                aria-controls="panel-body"
+                className="tab"
+                onClick={() => setTab(x.id)}
+              >
+                {x.label}
+              </button>
+            ))}
+          </div>
+          <div
+            className="panel-body"
+            id="panel-body"
+            role="tabpanel"
+            aria-labelledby={`tab-${tab}`}
+          >
+            {tab === "shape" && (
               <>
-                <Slider
-                  label="Height"
-                  value={1 - selected.y}
-                  min={0}
-                  max={1}
-                  step={0.005}
-                  format={pct}
-                  onChange={(v) => setMarker(selected.id, { y: 1 - v })}
-                />
-                <Slider
-                  label="Position"
-                  value={selected.x}
-                  min={0}
-                  max={1}
-                  step={0.005}
-                  format={pct}
-                  onChange={(v) => setMarker(selected.id, { x: v })}
-                />
-                <Slider
-                  label="Width"
-                  value={selected.width}
-                  min={L.markerWidth[0]}
-                  max={L.markerWidth[1]}
-                  step={0.01}
-                  format={pct}
-                  hint="How wide the ribbon is at this marker."
-                  onChange={(v) => setMarker(selected.id, { width: v })}
-                />
-                <Slider
-                  label="Twist"
-                  value={selected.twist}
-                  min={L.twist[0]}
-                  max={L.twist[1]}
-                  format={deg}
-                  hint="0° faces you. ±90° turns it edge-on into a bright line."
-                  onChange={(v) => setMarker(selected.id, { twist: v })}
-                />
+                <section className="group">
+                  <div className="group-head">
+                    <h2>{selected ? `Marker ${selIndex}` : "Markers"}</h2>
+                    <div className="row-buttons">
+                      <button
+                        type="button"
+                        onClick={addInGap}
+                        disabled={s.markers.length >= MAX_MARKERS}
+                      >
+                        Add
+                      </button>
+                      <button
+                        type="button"
+                        onClick={removeSelected}
+                        disabled={!selected || s.markers.length <= 2}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                  <div className="chips" role="group" aria-label="Pick a marker">
+                    {order.map((m, i) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className="marker-chip"
+                        aria-pressed={m.id === selectedId}
+                        onClick={() => setSelectedId(m.id)}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                  {selected ? (
+                    <>
+                      <Slider
+                        label="Height"
+                        value={1 - selected.y}
+                        min={0}
+                        max={1}
+                        step={0.005}
+                        format={pct}
+                        onChange={(v) => setMarker(selected.id, { y: 1 - v })}
+                      />
+                      <Slider
+                        label="Position"
+                        value={selected.x}
+                        min={0}
+                        max={1}
+                        step={0.005}
+                        format={pct}
+                        onChange={(v) => setMarker(selected.id, { x: v })}
+                      />
+                      <Slider
+                        label="Width"
+                        value={selected.width}
+                        min={L.markerWidth[0]}
+                        max={L.markerWidth[1]}
+                        step={0.01}
+                        format={pct}
+                        hint="How wide the ribbon is at this marker."
+                        onChange={(v) => setMarker(selected.id, { width: v })}
+                      />
+                      <Slider
+                        label="Twist"
+                        value={selected.twist}
+                        min={L.twist[0]}
+                        max={L.twist[1]}
+                        format={deg}
+                        hint="0° faces you. ±90° turns it edge-on into a bright line."
+                        onChange={(v) => setMarker(selected.id, { twist: v })}
+                      />
+                    </>
+                  ) : (
+                    <p className="hint">
+                      Pick a marker on the canvas to set its height, width and twist.
+                    </p>
+                  )}
+                </section>
               </>
-            ) : (
-              <p className="hint">
-                Pick a marker on the canvas to set its height, width and twist.
-              </p>
             )}
-          </section>
+            {tab === "dots" && (
+              <>
+                <section className="group">
+                  <h2>Dots</h2>
+                  <Slider
+                    label="Dot size"
+                    value={s.dotSize}
+                    min={L.dotSize[0]}
+                    max={20}
+                    step={0.1}
+                    format={(v) => `${v.toFixed(1)}px`}
+                    onChange={(v) => update({ dotSize: v })}
+                  />
+                  <Slider
+                    label="Max fill"
+                    value={s.fill}
+                    min={L.fill[0]}
+                    max={L.fill[1]}
+                    step={0.01}
+                    format={pct}
+                    hint="Biggest a dot can get next to its neighbors. Under 100% every dot stays separate."
+                    onChange={(v) => update({ fill: v })}
+                  />
+                  <Slider
+                    label="Along"
+                    value={s.columns}
+                    min={L.columns[0]}
+                    max={L.columns[1]}
+                    hint="Dots along the ribbon."
+                    onChange={(v) => update({ columns: v })}
+                  />
+                  <Slider
+                    label="Across"
+                    value={s.rows}
+                    min={L.rows[0]}
+                    max={L.rows[1]}
+                    hint="Dots across the ribbon."
+                    onChange={(v) => update({ rows: v })}
+                  />
+                  <div className="field">
+                    <span className="field-label" id="shape-label">
+                      Shape
+                    </span>
+                    <div className="chips" role="group" aria-labelledby="shape-label">
+                      {SHAPES.filter((x) => x.id !== "line").map((x) => (
+                        <button
+                          key={x.id}
+                          type="button"
+                          aria-pressed={s.shape === x.id}
+                          onClick={() => update({ shape: x.id as Shape })}
+                        >
+                          {x.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              </>
+            )}
+            {tab === "depth" && (
+              <>
+                <section className="group">
+                  <h2>Depth</h2>
+                  <Slider
+                    label="Perspective"
+                    value={s.perspective}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    format={pct}
+                    hint="Near dots grow, far dots shrink."
+                    onChange={(v) => update({ perspective: v })}
+                  />
+                  <Slider
+                    label="Depth fade"
+                    value={s.depthFade}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    format={pct}
+                    onChange={(v) => update({ depthFade: v })}
+                  />
+                  <Slider
+                    label="Curl"
+                    value={s.curl}
+                    min={L.curl[0]}
+                    max={L.curl[1]}
+                    step={0.01}
+                    format={pct}
+                    hint="Bends the ribbon across, for the scalloped arcs."
+                    onChange={(v) => update({ curl: v })}
+                  />
+                  <Slider
+                    label="Soft edges"
+                    value={s.edgeSoftness}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    format={pct}
+                    onChange={(v) => update({ edgeSoftness: v })}
+                  />
+                  <Slider
+                    label="Ripple"
+                    value={s.ripple}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    format={pct}
+                    onChange={(v) => update({ ripple: v })}
+                  />
+                  <Slider
+                    label="Ripple count"
+                    value={s.rippleCount}
+                    min={L.rippleCount[0]}
+                    max={L.rippleCount[1]}
+                    step={0.5}
+                    onChange={(v) => update({ rippleCount: v })}
+                  />
+                </section>
+              </>
+            )}
+            {tab === "color" && (
+              <>
+                <section className="group">
+                  <h2>Color</h2>
+                  <div className="colors">
+                    <ColorInput
+                      label="Near dots"
+                      value={s.ink}
+                      onChange={(v) => update({ ink: v })}
+                    />
+                    <ColorInput
+                      label="Far dots"
+                      value={s.inkFar}
+                      onChange={(v) => update({ inkFar: v })}
+                    />
+                    <ColorInput
+                      label="Background"
+                      value={s.background}
+                      onChange={(v) => update({ background: v })}
+                    />
+                  </div>
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={s.transparent}
+                      onChange={(e) => update({ transparent: e.target.checked })}
+                    />
+                    Transparent background
+                  </label>
+                </section>
+              </>
+            )}
+            {tab === "file" && (
+              <>
+                <section className="group">
+                  <h2>Artboard</h2>
+                  <div className="chips" role="group" aria-label="Artboard size">
+                    {SIZES.map((z) => (
+                      <button
+                        key={z.label}
+                        type="button"
+                        aria-pressed={s.width === z.width && s.height === z.height}
+                        onClick={() => update({ width: z.width, height: z.height })}
+                      >
+                        {z.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="size-inputs">
+                    <NumberInput
+                      label="Width"
+                      value={s.width}
+                      range={L.width}
+                      onChange={(v) => update({ width: v })}
+                    />
+                    <NumberInput
+                      label="Height"
+                      value={s.height}
+                      range={L.height}
+                      onChange={(v) => update({ height: v })}
+                    />
+                  </div>
+                </section>
 
-          <section className="group">
-            <h2>Dots</h2>
-            <Slider
-              label="Dot size"
-              value={s.dotSize}
-              min={L.dotSize[0]}
-              max={20}
-              step={0.1}
-              format={(v) => `${v.toFixed(1)}px`}
-              onChange={(v) => update({ dotSize: v })}
-            />
-            <Slider
-              label="Max fill"
-              value={s.fill}
-              min={L.fill[0]}
-              max={L.fill[1]}
-              step={0.01}
-              format={pct}
-              hint="Biggest a dot can get next to its neighbors. Under 100% every dot stays separate."
-              onChange={(v) => update({ fill: v })}
-            />
-            <Slider
-              label="Along"
-              value={s.columns}
-              min={L.columns[0]}
-              max={L.columns[1]}
-              hint="Dots along the ribbon."
-              onChange={(v) => update({ columns: v })}
-            />
-            <Slider
-              label="Across"
-              value={s.rows}
-              min={L.rows[0]}
-              max={L.rows[1]}
-              hint="Dots across the ribbon."
-              onChange={(v) => update({ rows: v })}
-            />
-            <div className="field">
-              <span className="field-label" id="shape-label">
-                Shape
-              </span>
-              <div className="chips" role="group" aria-labelledby="shape-label">
-                {SHAPES.filter((x) => x.id !== "line").map((x) => (
-                  <button
-                    key={x.id}
-                    type="button"
-                    aria-pressed={s.shape === x.id}
-                    onClick={() => update({ shape: x.id as Shape })}
-                  >
-                    {x.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
+                <SavedDesigns
+                  settings={s}
+                  onOpen={(next) => {
+                    update(next);
+                    setSelectedId(null);
+                  }}
+                  onStatus={setStatus}
+                  download={download}
+                />
 
-          <section className="group">
-            <h2>Depth</h2>
-            <Slider
-              label="Perspective"
-              value={s.perspective}
-              min={0}
-              max={1}
-              step={0.01}
-              format={pct}
-              hint="Near dots grow, far dots shrink."
-              onChange={(v) => update({ perspective: v })}
-            />
-            <Slider
-              label="Depth fade"
-              value={s.depthFade}
-              min={0}
-              max={1}
-              step={0.01}
-              format={pct}
-              onChange={(v) => update({ depthFade: v })}
-            />
-            <Slider
-              label="Curl"
-              value={s.curl}
-              min={L.curl[0]}
-              max={L.curl[1]}
-              step={0.01}
-              format={pct}
-              hint="Bends the ribbon across, for the scalloped arcs."
-              onChange={(v) => update({ curl: v })}
-            />
-            <Slider
-              label="Soft edges"
-              value={s.edgeSoftness}
-              min={0}
-              max={1}
-              step={0.01}
-              format={pct}
-              onChange={(v) => update({ edgeSoftness: v })}
-            />
-            <Slider
-              label="Ripple"
-              value={s.ripple}
-              min={0}
-              max={1}
-              step={0.01}
-              format={pct}
-              onChange={(v) => update({ ripple: v })}
-            />
-            <Slider
-              label="Ripple count"
-              value={s.rippleCount}
-              min={L.rippleCount[0]}
-              max={L.rippleCount[1]}
-              step={0.5}
-              onChange={(v) => update({ rippleCount: v })}
-            />
-          </section>
-
-          <section className="group">
-            <h2>Color</h2>
-            <div className="colors">
-              <ColorInput label="Near dots" value={s.ink} onChange={(v) => update({ ink: v })} />
-              <ColorInput
-                label="Far dots"
-                value={s.inkFar}
-                onChange={(v) => update({ inkFar: v })}
-              />
-              <ColorInput
-                label="Background"
-                value={s.background}
-                onChange={(v) => update({ background: v })}
-              />
-            </div>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={s.transparent}
-                onChange={(e) => update({ transparent: e.target.checked })}
-              />
-              Transparent background
-            </label>
-          </section>
-
-          <section className="group">
-            <h2>Artboard</h2>
-            <div className="chips" role="group" aria-label="Artboard size">
-              {SIZES.map((z) => (
-                <button
-                  key={z.label}
-                  type="button"
-                  aria-pressed={s.width === z.width && s.height === z.height}
-                  onClick={() => update({ width: z.width, height: z.height })}
-                >
-                  {z.label}
-                </button>
-              ))}
-            </div>
-            <div className="size-inputs">
-              <NumberInput
-                label="Width"
-                value={s.width}
-                range={L.width}
-                onChange={(v) => update({ width: v })}
-              />
-              <NumberInput
-                label="Height"
-                value={s.height}
-                range={L.height}
-                onChange={(v) => update({ height: v })}
-              />
-            </div>
-          </section>
-
-          <section className="group">
-            <h2>Export</h2>
-            <div className="row-buttons">
-              <button type="button" className="primary" onClick={exportSvg}>
-                Download SVG
-              </button>
-              <button type="button" onClick={() => exportPng(1)}>
-                PNG
-              </button>
-              <button type="button" onClick={() => exportPng(2)}>
-                PNG 2×
-              </button>
-            </div>
-            <p className="hint">
-              SVG is real vector dots you can edit in Figma or Illustrator. Everything stays in your
-              browser.
-            </p>
-          </section>
+                <section className="group">
+                  <h2>Export</h2>
+                  <div className="row-buttons">
+                    <button type="button" className="primary" onClick={exportSvg}>
+                      Download SVG
+                    </button>
+                    <button type="button" onClick={() => exportPng(1)}>
+                      PNG
+                    </button>
+                    <button type="button" onClick={() => exportPng(2)}>
+                      PNG 2×
+                    </button>
+                  </div>
+                  <p className="hint">
+                    SVG is real vector dots you can edit in Figma or Illustrator. Everything stays
+                    in your browser.
+                  </p>
+                </section>
+              </>
+            )}
+          </div>
         </aside>
       </main>
+      {showTutorial && <Tutorial onClose={() => setShowTutorial(false)} />}
     </div>
   );
 }
