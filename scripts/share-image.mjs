@@ -1,3 +1,4 @@
+/* global document */
 // Builds public/og-image.png (1200x630) from docs/share/card.html, with the ribbon rendered by
 // the app's own engine so the image always shows real output.
 // Usage: start the dev server (npx vite --port 5191), then
