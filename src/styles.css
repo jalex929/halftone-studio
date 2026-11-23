@@ -272,6 +272,18 @@ button.primary {
   color: var(--accent);
 }
 
+/* Phone-only list of smoothing suggestions (pills on the canvas are too easy to hit there). */
+.twist-list {
+  display: none;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.twist-list button {
+  font-size: 12.5px;
+  border-color: var(--accent);
+}
+
 .link-button {
   padding: 0;
   border: 0;
@@ -576,6 +588,23 @@ input[type="range"] {
   font-size: 13px;
 }
 
+.scheme {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid;
+  font-size: 10px;
+  line-height: 1;
+}
+
 .colors {
   display: flex;
   flex-direction: column;
@@ -737,7 +766,49 @@ code {
   flex: 1;
 }
 
+/* Touch screens: bigger targets everywhere. */
+@media (pointer: coarse) {
+  button {
+    min-height: 40px;
+  }
+  .range {
+    height: 36px;
+  }
+  .ctl-num {
+    height: 36px;
+  }
+  .tab {
+    min-height: 44px;
+  }
+  .info {
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
+    line-height: 22px;
+  }
+}
+
 @media (max-width: 860px) {
+  /* The panel has the same marker controls; the floating card would cover a small canvas. */
+  .marker-card,
+  .twist-pill {
+    display: none;
+  }
+  .twist-list {
+    display: flex;
+  }
+  /* Keep the artwork in view while scrolling through controls. */
+  .canvas-area {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--paper);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .stage {
+    max-height: 42vh;
+  }
   .top {
     grid-template-columns: 1fr;
     gap: 8px;

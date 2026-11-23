@@ -88,6 +88,7 @@ export function Stage({
   }, [dots, s, displayW]);
 
   // Pointer moves can arrive faster than the screen refreshes: apply at most one per frame.
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
   const pending = useRef<{ id: string; x: number; y: number } | null>(null);
   const frame = useRef(0);
   const queueMove = (id: string, x: number, y: number) => {
@@ -113,7 +114,10 @@ export function Stage({
 
   // Handle radius in artboard units, so it stays ~9px on screen at any zoom.
   const unit = s.width / displayW;
-  const handleR = 9 * unit;
+  // Bigger handles for fingers.
+  const coarse =
+    typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true;
+  const handleR = (coarse ? 13 : 9) * unit;
 
   const guide = useMemo(() => {
     const path = ribbonPath(s.markers);
@@ -161,7 +165,25 @@ export function Stage({
             onAddMarker(p.x, p.y);
           }}
           onPointerDown={(e) => {
-            if (e.target === e.currentTarget) onSelect(null);
+            if (e.target !== e.currentTarget) return;
+            onSelect(null);
+            // Touch screens don't reliably send dblclick here (touch gestures are off so markers
+            // can be dragged), so detect a double-tap ourselves.
+            if (e.pointerType !== "mouse") {
+              const now = performance.now();
+              const last = lastTap.current;
+              if (
+                last &&
+                now - last.t < 350 &&
+                Math.hypot(e.clientX - last.x, e.clientY - last.y) < 30
+              ) {
+                const p = toArtboard(e.clientX, e.clientY);
+                onAddMarker(p.x, p.y);
+                lastTap.current = null;
+              } else {
+                lastTap.current = { t: now, x: e.clientX, y: e.clientY };
+              }
+            }
           }}
           onPointerMove={(e) => {
             const d = drag.current;
@@ -253,7 +275,7 @@ export function Stage({
                 type="button"
                 className="twist-pill"
                 style={{
-                  left: `${mx * 100}%`,
+                  left: `clamp(80px, ${mx * 100}%, calc(100% - 80px))`,
                   top: `clamp(8px, calc(${path.y(mx) * 100}% - 64px), calc(100% - 40px))`,
                 }}
                 onPointerDown={(e) => e.stopPropagation()}

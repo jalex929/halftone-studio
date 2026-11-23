@@ -8,6 +8,7 @@ import {
   newMarkerId,
   ribbonPath,
   sanitizeRibbon,
+  sharpTwists,
   smoothTwist,
   sortedMarkers,
   type Marker,
@@ -49,6 +50,14 @@ function download(name: string, blob: Blob) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+const SCHEMES = [
+  { label: "Night", ink: "#ffffff", inkFar: "#ffffff", background: "#000000" },
+  { label: "Navy", ink: "#5f7fa3", inkFar: "#3b5573", background: "#0e2238" },
+  { label: "Paper", ink: "#1b1b3a", inkFar: "#5a5a78", background: "#f6f1e7" },
+  { label: "Riso", ink: "#ff4f8b", inkFar: "#2a4bd7", background: "#fff7ea" },
+  { label: "Ember", ink: "#ffd23f", inkFar: "#ff3c78", background: "#10142b" },
+];
 
 const TABS = [
   { id: "shape", label: "Shape" },
@@ -245,6 +254,23 @@ export function App() {
     setSelectedId(null);
   };
 
+  const smoothPair = (aId: string, bId: string) => {
+    const a = s.markers.find((m) => m.id === aId);
+    const b = s.markers.find((m) => m.id === bId);
+    if (!a || !b) return;
+    const next = smoothTwist(a, b);
+    const na = order.findIndex((m) => m.id === aId) + 1;
+    const nb = order.findIndex((m) => m.id === bId) + 1;
+    update({
+      markers: s.markers.map((m) =>
+        m.id === aId ? { ...m, twist: next.a } : m.id === bId ? { ...m, twist: next.b } : m,
+      ),
+    });
+    setStatus(`Smoothed the twist between markers ${na} and ${nb}.`);
+    setStatusUndo(true);
+  };
+  const sharp = showGuides ? sharpTwists(s.markers) : [];
+
   const selIndex = selected ? order.findIndex((m) => m.id === selected.id) + 1 : 0;
 
   return (
@@ -266,16 +292,26 @@ export function App() {
           <h1>Halftone Studio</h1>
         </div>
         <p className="tagline">
-          Drag the markers to shape the ribbon. Double-click the canvas to add one.
+          Drag markers to shape the ribbon. Double-click or double-tap the canvas to add one.
         </p>
         <div className="top-actions">
           <button type="button" onClick={() => setTourBase(s)}>
             How it works
           </button>
-          <button type="button" onClick={undo} disabled={past.current.length === 0}>
+          <button
+            type="button"
+            onClick={undo}
+            disabled={past.current.length === 0}
+            title="Undo (Ctrl+Z)"
+          >
             Undo
           </button>
-          <button type="button" onClick={redo} disabled={future.current.length === 0}>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={future.current.length === 0}
+            title="Redo (Ctrl+Y)"
+          >
             Redo
           </button>
           <label className="check">
@@ -302,27 +338,26 @@ export function App() {
             onDotCount={setDotCount}
             onEditMarker={(id, patch) => setMarker(id, patch)}
             onRemoveMarker={removeSelected}
-            onSmoothTwist={(aId, bId) => {
-              const a = s.markers.find((m) => m.id === aId);
-              const b = s.markers.find((m) => m.id === bId);
-              if (!a || !b) return;
-              const next = smoothTwist(a, b);
-              const na = order.findIndex((m) => m.id === aId) + 1;
-              const nb = order.findIndex((m) => m.id === bId) + 1;
-              update({
-                markers: s.markers.map((m) =>
-                  m.id === aId
-                    ? { ...m, twist: next.a }
-                    : m.id === bId
-                      ? { ...m, twist: next.b }
-                      : m,
-                ),
-              });
-              setStatus(`Smoothed the twist between markers ${na} and ${nb}.`);
-              setStatusUndo(true);
-            }}
+            onSmoothTwist={smoothPair}
             canRemove={s.markers.length > 2}
           />
+          {sharp.length > 0 && (
+            <div className="twist-list" role="group" aria-label="Sharp twists">
+              {sharp.map(({ a, b }) => {
+                const na = order.findIndex((m) => m.id === a.id) + 1;
+                const nb = order.findIndex((m) => m.id === b.id) + 1;
+                return (
+                  <button
+                    key={`${a.id}-${b.id}`}
+                    type="button"
+                    onClick={() => smoothPair(a.id, b.id)}
+                  >
+                    Smooth twist {na}–{nb}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <p className="meta">
             {s.width} × {s.height}px · {dotCount.toLocaleString()} dots · {s.markers.length} markers
             <span role="status" className="status">
@@ -602,6 +637,35 @@ export function App() {
               <>
                 <section className="group">
                   <h2>Color</h2>
+                  <div className="chips" role="group" aria-label="Color schemes">
+                    {SCHEMES.map((c) => (
+                      <button
+                        key={c.label}
+                        type="button"
+                        className="scheme"
+                        aria-pressed={
+                          s.ink === c.ink && s.inkFar === c.inkFar && s.background === c.background
+                        }
+                        onClick={() =>
+                          update({
+                            ink: c.ink,
+                            inkFar: c.inkFar,
+                            background: c.background,
+                            transparent: false,
+                          })
+                        }
+                      >
+                        <span
+                          className="swatch"
+                          aria-hidden="true"
+                          style={{ background: c.background, color: c.ink, borderColor: c.inkFar }}
+                        >
+                          ●
+                        </span>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="colors">
                     <ColorInput
                       label="Near dots"

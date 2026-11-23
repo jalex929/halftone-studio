@@ -132,8 +132,11 @@ export function Tour({ base, apply, setTab, select, onDone }: Props) {
   useLayoutEffect(() => {
     let raf = 0;
     const measure = () => {
-      const el = document.querySelector(step.target);
-      const r = el?.getBoundingClientRect() ?? null;
+      // Fall back to the controls panel when the target isn't shown (e.g. the marker card on
+      // phones, which use the panel's marker controls instead).
+      let r = document.querySelector(step.target)?.getBoundingClientRect() ?? null;
+      if (!r || r.width === 0)
+        r = document.querySelector(".panel")?.getBoundingClientRect() ?? null;
       setRect((prev) =>
         prev &&
         r &&
@@ -178,7 +181,13 @@ export function Tour({ base, apply, setTab, select, onDone }: Props) {
 
   // Card goes left of panel targets, below or above stage targets.
   const cardStyle: React.CSSProperties = {};
-  if (hole) {
+  if (window.innerWidth <= 860) {
+    // Phones: dock to the bottom so the pinned canvas (where the demo plays) stays visible.
+    cardStyle.left = 12;
+    cardStyle.right = 12;
+    cardStyle.bottom = 12;
+    cardStyle.width = "auto";
+  } else if (hole) {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     if (hole.left > vw * 0.55 && vw > 860) {

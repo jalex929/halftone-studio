@@ -143,7 +143,8 @@ export function SavedDesigns({ settings, onOpen, onStatus, download }: Props) {
         </ul>
       ) : (
         <p className="hint">
-          Save keeps designs in this browser. Save file gives you a file to keep or share.
+          Save keeps designs in this browser. Open file takes a saved file or any SVG or PNG you
+          exported here, and brings the design back to edit.
         </p>
       )}
     </section>
