@@ -41,6 +41,8 @@ export interface RibbonSettings {
   curl: number;
   /** Largest a dot can get, as a share of the distance to its nearest neighbor. */
   fill: number;
+  /** Adds in-between columns where fast twists fan the dots apart, 0..1. */
+  gapFill: number;
   shape: Shape;
   ink: string;
   /** Far color; equals ink for a single color. */
@@ -72,6 +74,7 @@ export const RIBBON_LIMITS = {
   rippleCount: [0, 30],
   curl: [-1, 1],
   fill: [0.2, 1.2],
+  gapFill: [0, 1],
   markerWidth: [0.01, 1.5],
   twist: [-180, 180],
 } as const;
@@ -115,7 +118,7 @@ export function generateRibbon(s: RibbonSettings): RibbonDot[] {
   const W = s.width;
   const H = s.height;
   const path = ribbonPath(s.markers);
-  const cols = Math.round(s.columns);
+  const baseCols = Math.round(s.columns);
   const rows = Math.round(s.rows);
   // Camera distance: far away (flat look) at perspective 0, close (strong depth) at 1.
   const focal = H * (6 - 5 * s.perspective);
@@ -140,8 +143,8 @@ export function generateRibbon(s: RibbonSettings): RibbonDot[] {
   const total = lengths[PATH_SAMPLES] ?? 1;
   const colU: number[] = [];
   let k = 0;
-  for (let c = 0; c <= cols; c++) {
-    const target = (total * c) / cols;
+  for (let c = 0; c <= baseCols; c++) {
+    const target = (total * c) / baseCols;
     while (k < PATH_SAMPLES - 1 && (lengths[k + 1] ?? 0) < target) k++;
     const a = lengths[k] ?? 0;
     const b = lengths[k + 1] ?? a + 1;
@@ -151,42 +154,114 @@ export function generateRibbon(s: RibbonSettings): RibbonDot[] {
 
   // 2. Build the 3D grid with a proper ribbon frame: the cross-section turns around the
   //    path's direction, so slopes don't shear or pinch the ribbon.
-  const n = (cols + 1) * rows;
-  const gx = new Float64Array(n);
-  const gy = new Float64Array(n);
-  const gz = new Float64Array(n);
-  const gScale = new Float64Array(n);
   const du = 1e-4;
-  for (let c = 0; c <= cols; c++) {
-    const u = colU[c] ?? 0;
-    const centerY = path.y(u) * H;
-    const tx = W;
-    const ty = ((path.y(u + du) - path.y(u - du)) / (2 * du)) * H;
-    const tl = Math.hypot(tx, ty) || 1;
-    const nx = -ty / tl;
-    const ny = tx / tl;
-    const half = (Math.max(0, path.width(u)) * H) / 2;
-    const theta = (path.twist(u) * Math.PI) / 180;
-    const cos = Math.cos(theta);
-    const sin = Math.sin(theta);
-    for (let r = 0; r < rows; r++) {
-      const v = rows === 1 ? 0 : -1 + (2 * r) / (rows - 1);
-      const local = v * half;
-      // Curl bends each cross-section into an arc, perpendicular to its own direction.
-      const bend = s.curl * half * 0.6 * (v * v - 1 / 3);
-      const wave = s.ripple * half * 0.25 * Math.sin(2 * Math.PI * s.rippleCount * u + v * 2.4);
-      const inPlane = local * cos - bend * sin + wave;
-      const px = u * W + nx * inPlane;
-      const py = centerY + ny * inPlane;
-      const pz = local * sin + bend * cos;
-      const scale = focal / (focal + pz);
-      const i = c * rows + r;
-      gScale[i] = scale;
-      gz[i] = pz;
-      gx[i] = cx + (px - cx) * scale;
-      gy[i] = cy + (py - cy) * scale;
+  const buildGrid = (us: number[]) => {
+    const n = us.length * rows;
+    const g = {
+      x: new Float64Array(n),
+      y: new Float64Array(n),
+      z: new Float64Array(n),
+      scale: new Float64Array(n),
+    };
+    for (let c = 0; c < us.length; c++) {
+      const u = us[c]!;
+      const centerY = path.y(u) * H;
+      const tx = W;
+      const ty = ((path.y(u + du) - path.y(u - du)) / (2 * du)) * H;
+      const tl = Math.hypot(tx, ty) || 1;
+      const nx = -ty / tl;
+      const ny = tx / tl;
+      const half = (Math.max(0, path.width(u)) * H) / 2;
+      const theta = (path.twist(u) * Math.PI) / 180;
+      const cos = Math.cos(theta);
+      const sin = Math.sin(theta);
+      for (let r = 0; r < rows; r++) {
+        const v = rows === 1 ? 0 : -1 + (2 * r) / (rows - 1);
+        const local = v * half;
+        // Curl bends each cross-section into an arc, perpendicular to its own direction.
+        const bend = s.curl * half * 0.6 * (v * v - 1 / 3);
+        const wave = s.ripple * half * 0.25 * Math.sin(2 * Math.PI * s.rippleCount * u + v * 2.4);
+        const inPlane = local * cos - bend * sin + wave;
+        const px = u * W + nx * inPlane;
+        const py = centerY + ny * inPlane;
+        const pz = local * sin + bend * cos;
+        const scale = focal / (focal + pz);
+        const i = c * rows + r;
+        g.scale[i] = scale;
+        g.z[i] = pz;
+        g.x[i] = cx + (px - cx) * scale;
+        g.y[i] = cy + (py - cy) * scale;
+      }
+    }
+    return g;
+  };
+
+  // 2b. Gap fill: where a fast twist fans neighboring columns far apart on screen (the spiky
+  //     strips), add in-between columns. Their dots size themselves to the room they have, so
+  //     the twist fills in with small dots and reads as one continuous sheet.
+  let us = colU;
+  let grid = buildGrid(us);
+  // For each refined column: which base interval it belongs to, and whether it's an added one.
+  let colInterval: Int32Array | null = null;
+  let colAdded: Uint8Array | null = null;
+  const baseGap = new Float64Array(baseCols * rows);
+  let gapLimit = Infinity;
+  if (s.gapFill > 0 && rows > 1) {
+    const intervalMax = new Float64Array(baseCols);
+    const all: number[] = [];
+    for (let c = 0; c < baseCols; c++) {
+      let m = 0;
+      for (let r = 0; r < rows; r++) {
+        const i = c * rows + r;
+        const j = i + rows;
+        const d = Math.hypot(grid.x[i]! - grid.x[j]!, grid.y[i]! - grid.y[j]!);
+        baseGap[i] = d;
+        if (d > m) m = d;
+        if ((r & 3) === 0) all.push(d);
+      }
+      intervalMax[c] = m;
+    }
+    all.sort((p, q) => p - q);
+    const typical = Math.max(0.5, all[all.length >> 1] ?? 1);
+    // Low fill only splits gaps 3x the typical spacing; 100% splits anything over 1.15x.
+    const limit = typical * (3 - 1.85 * s.gapFill);
+    gapLimit = limit;
+    const split = new Int32Array(baseCols);
+    for (let c = 0; c < baseCols; c++) split[c] = Math.min(12, Math.ceil(intervalMax[c]! / limit));
+    // Ramp density up and down gradually (neighbors differ by at most 1 extra column), so
+    // filled areas blend in instead of showing seams where the density jumps.
+    for (let c = 1; c < baseCols; c++) split[c] = Math.max(split[c]!, split[c - 1]! - 1);
+    for (let c = baseCols - 2; c >= 0; c--) split[c] = Math.max(split[c]!, split[c + 1]! - 1);
+    const budget = baseCols * 3; // extra columns allowed, keeps the worst case fast
+    let added = 0;
+    const refined: number[] = [];
+    const interval: number[] = [];
+    const isAdded: number[] = [];
+    for (let c = 0; c < baseCols; c++) {
+      const u0 = colU[c]!;
+      const u1 = colU[c + 1]!;
+      refined.push(u0);
+      interval.push(c);
+      isAdded.push(0);
+      const m = split[c]!;
+      for (let k2 = 1; k2 < m && added < budget; k2++, added++) {
+        refined.push(u0 + ((u1 - u0) * k2) / m);
+        interval.push(c);
+        isAdded.push(1);
+      }
+    }
+    refined.push(colU[baseCols]!);
+    interval.push(baseCols - 1);
+    isAdded.push(0);
+    if (added > 0) {
+      us = refined;
+      grid = buildGrid(us);
+      colInterval = Int32Array.from(interval);
+      colAdded = Uint8Array.from(isAdded);
     }
   }
+  const cols = us.length - 1;
+  const { x: gx, y: gy, z: gz, scale: gScale } = grid;
 
   // 3. Size every dot to the room it actually has on screen, like a real halftone screen:
   //    a dot never grows past `fill` of the distance to its neighbors, so squeezed areas
@@ -221,9 +296,20 @@ export function generateRibbon(s: RibbonSettings): RibbonDot[] {
       const i = c * rows + r;
       const scale = gScale[i]!;
       if (scale <= 0) continue;
+      const added = colAdded !== null && colAdded[c] === 1;
+      // Added (gap-fill) dots only go where the original columns spread too far apart.
+      if (added && baseGap[colInterval![c]! * rows + r]! <= gapLimit) continue;
       let along = Infinity;
-      if (c > 0) along = gapAlong[i - rows]!;
-      if (c < cols) along = Math.min(along, gapAlong[i]!);
+      if (colAdded && !added) {
+        // An original dot keeps the room it had before gap fill, so it doesn't shrink.
+        // Original column B starts base interval B (the last one ends interval B - 1).
+        const B = c === cols ? baseCols : colInterval![c]!;
+        if (B < baseCols) along = baseGap[B * rows + r]!;
+        if (B > 0) along = Math.min(along, baseGap[(B - 1) * rows + r]!);
+      } else {
+        if (c > 0) along = gapAlong[i - rows]!;
+        if (c < cols) along = Math.min(along, gapAlong[i]!);
+      }
       let across = Infinity;
       if (r > 0) across = gapAcross[i - 1]!;
       if (r < rows - 1) across = Math.min(across, gapAcross[i]!);
@@ -250,6 +336,7 @@ export function generateRibbon(s: RibbonSettings): RibbonDot[] {
       });
     }
   }
+
   return paintOrder(dots);
 }
 
@@ -270,6 +357,30 @@ function paintOrder(dots: RibbonDot[]): RibbonDot[] {
   const out = new Array<RibbonDot>(n);
   for (let i = 0; i < n; i++) out[i] = dots[(keys[i] ?? 0) % SHIFT]!;
   return out;
+}
+
+/** Degrees of twist per 1% of artboard width above which a twist counts as sharp. */
+export const SHARP_TWIST = 6;
+
+/** Neighboring marker pairs whose twist changes faster than SHARP_TWIST. */
+export function sharpTwists(markers: Marker[]): { a: Marker; b: Marker }[] {
+  const ms = sortedMarkers(markers);
+  const out: { a: Marker; b: Marker }[] = [];
+  for (let i = 0; i < ms.length - 1; i++) {
+    const a = ms[i]!;
+    const b = ms[i + 1]!;
+    const span = Math.max(0.005, b.x - a.x) * 100;
+    if (Math.abs(b.twist - a.twist) / span > SHARP_TWIST) out.push({ a, b });
+  }
+  return out;
+}
+
+/** Eases a sharp twist: keeps its middle angle, shrinks the change to a gentle rate. */
+export function smoothTwist(a: Marker, b: Marker): { a: number; b: number } {
+  const span = Math.max(0.005, b.x - a.x) * 100;
+  const mid = (a.twist + b.twist) / 2;
+  const delta = Math.sign(b.twist - a.twist) * Math.min(Math.abs(b.twist - a.twist), 4 * span);
+  return { a: mid - delta / 2, b: mid + delta / 2 };
 }
 
 export const NAVY = "#0e2238";
@@ -294,6 +405,7 @@ export const DEFAULT_RIBBON: RibbonSettings = {
   rippleCount: 9,
   curl: 0.5,
   fill: 0.8,
+  gapFill: 0.7,
   shape: "circle",
   ink: "#ffffff",
   inkFar: "#ffffff",
@@ -423,6 +535,7 @@ export function sanitizeRibbon(input: unknown): RibbonSettings {
     rippleCount: num(o.rippleCount, L.rippleCount, d.rippleCount),
     curl: num(o.curl, L.curl, d.curl),
     fill: num(o.fill, L.fill, d.fill),
+    gapFill: num(o.gapFill, L.gapFill, d.gapFill),
     shape: SHAPES.some((x) => x.id === o.shape) ? (o.shape as Shape) : d.shape,
     ink: isHex(o.ink) ? o.ink : d.ink,
     inkFar: isHex(o.inkFar) ? o.inkFar : d.inkFar,

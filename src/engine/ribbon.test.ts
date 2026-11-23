@@ -1,4 +1,11 @@
-import { DEFAULT_RIBBON, RIBBON_PRESETS, generateRibbon, sanitizeRibbon } from "./ribbon";
+import {
+  DEFAULT_RIBBON,
+  RIBBON_PRESETS,
+  generateRibbon,
+  sanitizeRibbon,
+  sharpTwists,
+  smoothTwist,
+} from "./ribbon";
 import { ribbonToSvg } from "./ribbonRender";
 import { monotoneCurve } from "./curve";
 
@@ -87,5 +94,33 @@ describe("ribbon", () => {
     for (let i = 1; i < dots.length; i++) {
       expect(dots[i]!.depth).toBeLessThanOrEqual(dots[i - 1]!.depth + 1 / 16);
     }
+  });
+  it("gap fill closes the fan where a fast twist spreads columns apart", () => {
+    const s = {
+      ...DEFAULT_RIBBON,
+      ripple: 0,
+      columns: 120,
+      rows: 30,
+      markers: [
+        { id: "a", x: 0, y: 0.5, width: 0.8, twist: 15 },
+        { id: "b", x: 0.1, y: 0.5, width: 0.8, twist: 176 },
+        { id: "c", x: 1, y: 0.5, width: 0.8, twist: 170 },
+      ],
+    };
+    const off = generateRibbon({ ...s, gapFill: 0 });
+    const on = generateRibbon({ ...s, gapFill: 1 });
+    expect(on.length).toBeGreaterThan(off.length);
+    // Added dots fill gaps, so they're small: average size goes down, never up.
+    const avg = (d: typeof on) => d.reduce((a, x) => a + x.size, 0) / d.length;
+    expect(avg(on)).toBeLessThanOrEqual(avg(off));
+  });
+  it("finds sharp twists and smoothing makes them gentle", () => {
+    const a = { id: "a", x: 0, y: 0.5, width: 0.3, twist: 15 };
+    const b = { id: "b", x: 0.095, y: 0.5, width: 0.3, twist: 176 };
+    const c = { id: "c", x: 0.6, y: 0.5, width: 0.3, twist: 150 };
+    expect(sharpTwists([c, b, a]).map((p) => p.a.id + p.b.id)).toEqual(["ab"]);
+    const next = smoothTwist(a, b);
+    expect(sharpTwists([{ ...a, twist: next.a }, { ...b, twist: next.b }, c])).toEqual([]);
+    expect((next.a + next.b) / 2).toBeCloseTo((15 + 176) / 2);
   });
 });

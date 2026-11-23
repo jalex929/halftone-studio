@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { generateRibbon, ribbonPath, type Marker, type RibbonSettings } from "../engine/ribbon";
 import { GLRibbon } from "../engine/glRender";
 import { drawRibbon } from "../engine/ribbonRender";
-import { RIBBON_LIMITS as L } from "../engine/ribbon";
+import { RIBBON_LIMITS as L, sharpTwists } from "../engine/ribbon";
 import { Slider, deg, pct } from "./Slider";
 
 interface Props {
@@ -20,6 +20,8 @@ interface Props {
   onEditMarker: (id: string, patch: Partial<Marker>) => void;
   onRemoveMarker: () => void;
   canRemove: boolean;
+  /** Optional fix offered where neighboring markers twist sharply. */
+  onSmoothTwist: (aId: string, bId: string) => void;
 }
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -36,6 +38,7 @@ export function Stage({
   onEditMarker,
   onRemoveMarker,
   canRemove,
+  onSmoothTwist,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -200,9 +203,14 @@ export function Stage({
                 onKeyUp={(e) => e.key.startsWith("Arrow") && onCommit()}
                 onPointerDown={(e) => {
                   e.stopPropagation();
-                  (e.currentTarget.ownerSVGElement ?? e.currentTarget).setPointerCapture?.(
-                    e.pointerId,
-                  );
+                  // Capture keeps the drag going outside the canvas; never let a refusal block the drag.
+                  try {
+                    (e.currentTarget.ownerSVGElement ?? e.currentTarget).setPointerCapture(
+                      e.pointerId,
+                    );
+                  } catch {
+                    /* capture unavailable: the drag still works while over the canvas */
+                  }
                   drag.current = { id: m.id, pointer: e.pointerId };
                   onSelect(m.id);
                 }}
@@ -231,6 +239,33 @@ export function Stage({
           })}
         </svg>
       )}
+      {showGuides &&
+        (() => {
+          const order = [...s.markers].sort((a, b) => a.x - b.x);
+          const path = ribbonPath(s.markers);
+          return sharpTwists(s.markers).map(({ a, b }) => {
+            const mx = (a.x + b.x) / 2;
+            const na = order.indexOf(a) + 1;
+            const nb = order.indexOf(b) + 1;
+            return (
+              <button
+                key={`${a.id}-${b.id}`}
+                type="button"
+                className="twist-pill"
+                style={{
+                  left: `${mx * 100}%`,
+                  top: `clamp(8px, calc(${path.y(mx) * 100}% - 64px), calc(100% - 40px))`,
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onClick={() => onSmoothTwist(a.id, b.id)}
+                aria-label={`Sharp twist between markers ${na} and ${nb}. Smooth it.`}
+              >
+                Sharp twist · <strong>Smooth</strong>
+              </button>
+            );
+          });
+        })()}
       {showGuides &&
         (() => {
           const m = s.markers.find((x) => x.id === selectedId);

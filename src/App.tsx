@@ -8,6 +8,7 @@ import {
   newMarkerId,
   ribbonPath,
   sanitizeRibbon,
+  smoothTwist,
   sortedMarkers,
   type Marker,
   type RibbonSettings,
@@ -67,6 +68,8 @@ export function App() {
   const [showGuides, setShowGuides] = useState(true);
   const [dotCount, setDotCount] = useState(0);
   const [status, setStatus] = useState("");
+  /** Optional one-click action shown with the status, e.g. Undo after an automatic fix. */
+  const [statusUndo, setStatusUndo] = useState(false);
   useEffect(() => {
     if (!tourSeen()) setTourBase(s);
     // Only on first load.
@@ -76,6 +79,14 @@ export function App() {
   const future = useRef<RibbonSettings[]>([]);
   // The settings as of the last undo step, so a whole drag becomes one step.
   const committed = useRef(s);
+
+  // A new edit makes the status-line Undo stale.
+  useEffect(() => {
+    if (statusUndo) {
+      const timer = setTimeout(() => setStatusUndo(false), 12000);
+      return () => clearTimeout(timer);
+    }
+  }, [statusUndo]);
 
   const commit = useCallback(() => {
     setS((cur) => {
@@ -291,6 +302,25 @@ export function App() {
             onDotCount={setDotCount}
             onEditMarker={(id, patch) => setMarker(id, patch)}
             onRemoveMarker={removeSelected}
+            onSmoothTwist={(aId, bId) => {
+              const a = s.markers.find((m) => m.id === aId);
+              const b = s.markers.find((m) => m.id === bId);
+              if (!a || !b) return;
+              const next = smoothTwist(a, b);
+              const na = order.findIndex((m) => m.id === aId) + 1;
+              const nb = order.findIndex((m) => m.id === bId) + 1;
+              update({
+                markers: s.markers.map((m) =>
+                  m.id === aId
+                    ? { ...m, twist: next.a }
+                    : m.id === bId
+                      ? { ...m, twist: next.b }
+                      : m,
+                ),
+              });
+              setStatus(`Smoothed the twist between markers ${na} and ${nb}.`);
+              setStatusUndo(true);
+            }}
             canRemove={s.markers.length > 2}
           />
           <p className="meta">
@@ -298,6 +328,19 @@ export function App() {
             <span role="status" className="status">
               {status}
             </span>
+            {statusUndo && (
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => {
+                  undo();
+                  setStatus("Undone.");
+                  setStatusUndo(false);
+                }}
+              >
+                Undo
+              </button>
+            )}
           </p>
         </section>
 
@@ -473,6 +516,16 @@ export function App() {
                     display={pct}
                     hint="Biggest a dot can get next to its neighbors. Under 100% every dot stays separate."
                     onChange={(v) => update({ fill: v })}
+                  />
+                  <Slider
+                    label="Gap fill"
+                    value={s.gapFill}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    display={pct}
+                    hint="Fills fast twists with small dots so the ribbon reads as one sheet instead of spiky strips."
+                    onChange={(v) => update({ gapFill: v })}
                   />
                   <Slider
                     label="Along"
