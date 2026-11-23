@@ -1,0 +1,135 @@
+<!doctype html>
+<!--
+  Share image source (1200x630). scripts/share-image.mjs renders the ribbon with the app's own
+  engine, drops it into #art, and screenshots this page to public/og-image.png.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@500;600&display=block"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        position: relative;
+        background: #0f1013;
+        color: #eceae6;
+        font-family: "Archivo", sans-serif;
+      }
+      /* The ribbon runs under the right side and fades out before it reaches the text. */
+      #art {
+        position: absolute;
+        inset: 0;
+        width: 1200px;
+        height: 630px;
+        -webkit-mask-image: linear-gradient(90deg, transparent 32%, #000 60%);
+        mask-image: linear-gradient(90deg, transparent 32%, #000 60%);
+      }
+      .text {
+        position: absolute;
+        left: 72px;
+        top: 64px;
+        width: 520px;
+      }
+      .kicker {
+        font-family: "IBM Plex Mono", monospace;
+        font-weight: 600;
+        font-size: 18px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #ff5a36;
+      }
+      h1 {
+        margin-top: 18px;
+        font-size: 96px;
+        line-height: 0.92;
+        font-weight: 800;
+        letter-spacing: -0.035em;
+      }
+      .tag {
+        margin-top: 26px;
+        font-size: 28px;
+        font-weight: 500;
+        line-height: 1.25;
+        color: #eceae6;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+        margin-top: 26px;
+        display: grid;
+        gap: 12px;
+        font-size: 21px;
+        color: #a8adb7;
+      }
+      li {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      /* Bullet: three dots growing in size, a tiny halftone. */
+      .dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        flex: none;
+      }
+      .dots i {
+        display: block;
+        border-radius: 50%;
+        background: #ff5a36;
+      }
+      .dots i:nth-child(1) {
+        width: 4px;
+        height: 4px;
+      }
+      .dots i:nth-child(2) {
+        width: 7px;
+        height: 7px;
+      }
+      .dots i:nth-child(3) {
+        width: 10px;
+        height: 10px;
+      }
+      .by {
+        position: absolute;
+        left: 72px;
+        bottom: 46px;
+        font-family: "IBM Plex Mono", monospace;
+        font-weight: 600;
+        font-size: 16px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #a8adb7;
+      }
+    </style>
+  </head>
+  <body>
+    <img id="art" alt="" />
+    <div class="text">
+      <p class="kicker">Lab · Free tool</p>
+      <h1>Halftone<br />Studio</h1>
+      <p class="tag">Shape a ribbon of dots.<br />Export real vector halftones.</p>
+      <ul>
+        <li>
+          <span class="dots"><i></i><i></i><i></i></span>Drag markers to peak, dip and twist
+        </li>
+        <li>
+          <span class="dots"><i></i><i></i><i></i></span>Every dot stays a crisp, separate dot
+        </li>
+        <li>
+          <span class="dots"><i></i><i></i><i></i></span>SVG and PNG, no sign-up
+        </li>
+      </ul>
+    </div>
+    <p class="by">jayfox.design/lab</p>
+  </body>
+</html>

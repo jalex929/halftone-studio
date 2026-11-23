@@ -1,5 +1,7 @@
 # Halftone Studio
 
+![Halftone Studio: a twisting ribbon of white halftone dots on a dark background, next to the title and three features](public/og-image.png)
+
 Make halftone dot art in the browser without learning Illustrator's halftone workflow. Drag
 markers on the canvas to shape a 3D ribbon of dots: where it rises and dips, how wide it is,
 and how far it twists. Then export real vector SVG or PNG. Free, no sign-up, and everything
@@ -18,6 +20,12 @@ stays in your browser.
   puts your design back.
 - **Color, artboard, export:** near and far dot color, background or transparent, size presets,
   SVG / PNG / PNG 2x. Undo and redo with Ctrl+Z and Ctrl+Y.
+
+## Share image
+
+`public/og-image.png` (1200x630) is built from `docs/share/card.html` with a ribbon rendered by
+the app's own engine. With the dev server running: `node scripts/share-image.mjs`. Build with
+`VITE_SITE_URL=https://jayfox.design/lab/halftone-studio` so share tags use the full address.
 
 ## Run it
 
