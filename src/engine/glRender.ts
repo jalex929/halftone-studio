@@ -115,6 +115,8 @@ const colorCache = new Map<string, [number, number, number]>();
 function rgb(hex: string): [number, number, number] {
   let c = colorCache.get(hex);
   if (!c) {
+    // Dragging a color picker makes a new set of colors every frame; don't keep them all.
+    if (colorCache.size > 512) colorCache.clear();
     const n = parseInt(hex.slice(1), 16);
     c = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
     colorCache.set(hex, c);

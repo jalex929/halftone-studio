@@ -1,4 +1,11 @@
-import { DEFAULT_RIBBON, RIBBON_PRESETS, generateRibbon, sanitizeRibbon } from "./ribbon";
+import {
+  DEFAULT_RIBBON,
+  RIBBON_PRESETS,
+  TONE_STEPS,
+  generateRibbon,
+  recolorRibbon,
+  sanitizeRibbon,
+} from "./ribbon";
 import { ribbonToSvg } from "./ribbonRender";
 import { monotoneCurve } from "./curve";
 
@@ -106,5 +113,31 @@ describe("ribbon", () => {
     // Added dots fill gaps, so they're small: average size goes down, never up.
     const avg = (d: typeof on) => d.reduce((a, x) => a + x.size, 0) / d.length;
     expect(avg(on)).toBeLessThanOrEqual(avg(off));
+  });
+
+  it("recoloring placed dots matches generating them with the new colors", () => {
+    for (const p of RIBBON_PRESETS) {
+      const before = generateRibbon(p.settings);
+      const snapshot = JSON.stringify(before);
+      for (const [ink, inkFar] of [
+        ["#ff5a36", "#1b2a4a"],
+        ["#123456", "#123456"],
+      ] as const) {
+        const recolored = recolorRibbon(before, ink, inkFar);
+        expect(recolored).toEqual(generateRibbon({ ...p.settings, ink, inkFar }));
+      }
+      // The dots passed in are left alone (the canvas keeps them for the next color).
+      expect(JSON.stringify(before)).toBe(snapshot);
+    }
+  });
+
+  it("near dots take the near color and far dots the far color", () => {
+    const dots = generateRibbon({ ...DEFAULT_RIBBON, ink: "#ffffff", inkFar: "#000000" });
+    for (const d of dots) expect(d.tone).toBeGreaterThanOrEqual(0);
+    for (const d of dots) expect(d.tone).toBeLessThanOrEqual(TONE_STEPS);
+    const nearest = dots.filter((d) => d.tone === 0);
+    const farthest = dots.filter((d) => d.tone === TONE_STEPS);
+    expect(nearest.every((d) => d.color === "#ffffff")).toBe(true);
+    expect(farthest.every((d) => d.color === "#000000")).toBe(true);
   });
 });

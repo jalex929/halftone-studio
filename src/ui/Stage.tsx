@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { generateRibbon, ribbonPath, type Marker, type RibbonSettings } from "../engine/ribbon";
+import {
+  generateRibbon,
+  recolorRibbon,
+  ribbonPath,
+  type Marker,
+  type RibbonSettings,
+} from "../engine/ribbon";
 import { GLRibbon } from "../engine/glRender";
 import { drawRibbon } from "../engine/ribbonRender";
 import { RIBBON_LIMITS as L } from "../engine/ribbon";
@@ -54,7 +60,17 @@ export function Stage({
     return () => ro.disconnect();
   }, []);
 
-  const dots = useMemo(() => generateRibbon(s), [s]);
+  // Colors don't move dots: a color change only recolors them, so pickers stay smooth.
+  const shapeKey = JSON.stringify({
+    ...s,
+    ink: "",
+    inkFar: "",
+    background: "",
+    transparent: false,
+  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const shape = useMemo(() => generateRibbon(s), [shapeKey]);
+  const dots = useMemo(() => recolorRibbon(shape, s.ink, s.inkFar), [shape, s.ink, s.inkFar]);
 
   useEffect(() => {
     onDotCount?.(dots.length);

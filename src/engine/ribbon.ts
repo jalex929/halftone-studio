@@ -59,6 +59,29 @@ export interface RibbonDot {
   opacity: number;
   color: string;
   depth: number;
+  /** Near-to-far color step, 0..TONE_STEPS: lets `recolorRibbon` change colors without new geometry. */
+  tone: number;
+}
+
+/** Steps between the near and far colors (SVG output groups dots by color). */
+export const TONE_STEPS = 16;
+
+/** The color for each tone step, built once per color pair instead of once per dot. */
+function tonePalette(ink: string, inkFar: string): string[] {
+  const out: string[] = [];
+  for (let k = 0; k <= TONE_STEPS; k++) {
+    out.push(ink === inkFar ? ink : mix(ink, inkFar, k / TONE_STEPS, TONE_STEPS));
+  }
+  return out;
+}
+
+/**
+ * New near and far colors for dots that are already placed. Much cheaper than generating the
+ * ribbon again, so color pickers can update live. The input dots are left unchanged.
+ */
+export function recolorRibbon(dots: RibbonDot[], ink: string, inkFar: string): RibbonDot[] {
+  const palette = tonePalette(ink, inkFar);
+  return dots.map((d) => ({ ...d, color: palette[d.tone]! }));
 }
 
 export const RIBBON_LIMITS = {
@@ -289,7 +312,7 @@ export function generateRibbon(s: RibbonSettings): RibbonDot[] {
     rowEdge[r] = 1 - s.edgeSoftness * Math.abs(v) ** 3;
   }
   const sizePower = 1 + 2 * s.perspective;
-  const oneInk = s.ink === s.inkFar;
+  const palette = tonePalette(s.ink, s.inkFar);
   const dots: RibbonDot[] = [];
   for (let c = 0; c <= cols; c++) {
     for (let r = 0; r < rows; r++) {
@@ -326,14 +349,8 @@ export function generateRibbon(s: RibbonSettings): RibbonDot[] {
       const depth01 = Math.max(0, Math.min(1, 0.5 + pz / (2 * maxDepth)));
       const opacity = Math.round((1 - s.depthFade * depth01) * 20) / 20;
       if (opacity <= 0) continue;
-      dots.push({
-        x,
-        y,
-        size,
-        opacity,
-        color: oneInk ? s.ink : mix(s.ink, s.inkFar, depth01, 16),
-        depth: pz,
-      });
+      const tone = Math.round(depth01 * TONE_STEPS);
+      dots.push({ x, y, size, opacity, color: palette[tone]!, depth: pz, tone });
     }
   }
 

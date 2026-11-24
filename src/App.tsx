@@ -21,6 +21,12 @@ import { SavedDesigns } from "./ui/SavedDesigns";
 import { Stage } from "./ui/Stage";
 import { Tour, tourSeen } from "./ui/Tour";
 
+/** Where "back" goes: the Lab on jayfox.design (relative when hosted inside it). */
+const LAB_URL =
+  typeof location !== "undefined" && location.pathname.includes("/lab/")
+    ? "../"
+    : "https://jayfox.design/lab";
+
 const DRAFT_KEY = "halftone-studio:ribbon";
 
 const SIZES = [
@@ -85,6 +91,9 @@ export function App() {
   // The settings as of the last undo step, so a whole drag becomes one step.
   const committed = useRef(s);
 
+  // Undo history lives in refs; this tick re-renders Undo/Redo when it changes, since the
+  // settings themselves may already be current (a color picker applies them live first).
+  const [, setHistoryTick] = useState(0);
   const commit = useCallback(() => {
     setS((cur) => {
       if (cur !== committed.current) {
@@ -94,6 +103,7 @@ export function App() {
       }
       return cur;
     });
+    setHistoryTick((t) => t + 1);
   }, []);
 
   /** Change settings; `live` skips the undo step (used mid-drag). */
@@ -248,6 +258,12 @@ export function App() {
     <div className="app">
       <header className="top">
         <div className="brand">
+          <a className="back" href={LAB_URL} aria-label="Back to the Lab at jayfox.design">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+            <span className="back-text">jayfox.design/lab</span>
+          </a>
           <svg viewBox="0 0 28 28" aria-hidden="true" className="logo">
             {[0, 1, 2, 3].map((r) =>
               [0, 1, 2, 3].map((c) => (
@@ -610,17 +626,17 @@ export function App() {
                     <ColorInput
                       label="Near dots"
                       value={s.ink}
-                      onChange={(v) => update({ ink: v })}
+                      onChange={(v, live) => update({ ink: v }, live)}
                     />
                     <ColorInput
                       label="Far dots"
                       value={s.inkFar}
-                      onChange={(v) => update({ inkFar: v })}
+                      onChange={(v, live) => update({ inkFar: v }, live)}
                     />
                     <ColorInput
                       label="Background"
                       value={s.background}
-                      onChange={(v) => update({ background: v })}
+                      onChange={(v, live) => update({ background: v }, live)}
                     />
                   </div>
                   <label className="check">
@@ -719,14 +735,56 @@ function ColorInput({
 }: {
   label: string;
   value: string;
-  onChange: (v: string) => void;
+  /** `live` is true while the picker is open; false once when it closes (one undo step). */
+  onChange: (v: string, live: boolean) => void;
 }) {
+  // A picker sends many changes per second while dragging. Show each one on the swatch right
+  // away, but update the artwork at most once per frame, and save one undo step at the end.
+  const [shown, setShown] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const frame = useRef(0);
+  const pending = useRef<string | null>(null);
+  const changeRef = useRef(onChange);
+  changeRef.current = onChange;
+
+  useEffect(() => setShown(value), [value]);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    // The native "change" event fires once, when the picker closes (React's onChange fires on
+    // every input instead).
+    const done = () => {
+      cancelAnimationFrame(frame.current);
+      frame.current = 0;
+      pending.current = null;
+      changeRef.current(el.value, false);
+    };
+    el.addEventListener("change", done);
+    return () => {
+      el.removeEventListener("change", done);
+      cancelAnimationFrame(frame.current);
+    };
+  }, []);
+
+  const onInput = (v: string) => {
+    setShown(v);
+    pending.current = v;
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      const p = pending.current;
+      pending.current = null;
+      if (p) changeRef.current(p, true);
+    });
+  };
+
   return (
     <label className="color">
-      <input type="color" value={value} onChange={(e) => onChange(e.target.value)} />
+      <input ref={inputRef} type="color" value={shown} onChange={(e) => onInput(e.target.value)} />
       <span>
         {label}
-        <code>{value}</code>
+        <code>{shown}</code>
       </span>
     </label>
   );
